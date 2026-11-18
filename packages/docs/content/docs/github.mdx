@@ -1,13 +1,13 @@
 ---
 title: "Git hosts: issues and pull requests"
-description: Connect GitHub, GitLab, Gitea, Forgejo or Gerrit and work with issues and pull requests from OpenChamber.
+description: Connect GitHub, GitLab, Gitea, Forgejo or Gerrit and work with issues and pull requests from OhPiChamber.
 ---
 
 # Git hosts: issues and pull requests
 
-Connect an account on the host your project lives on and OpenChamber can list its issues and pull requests, start a session from one, and open, review and merge pull requests for you. Five hosts are built in: GitHub, including GitHub Enterprise; GitLab, including self-managed GitLab; Gitea; Forgejo, including Codeberg; and Gerrit. An [extension](/extensions/#an-extension-as-a-git-host) can add another.
+Connect an account on the host your project lives on and OhPiChamber can list its issues and pull requests, start a session from one, and open, review and merge pull requests for you. Five hosts are built in: GitHub, including GitHub Enterprise; GitLab, including self-managed GitLab; Gitea; Forgejo, including Codeberg; and Gerrit. An [extension](/extensions/#an-extension-as-a-git-host) can add another.
 
-The project's remote decides which host OpenChamber talks to. A project whose `origin` is on gitlab.com uses your GitLab account for the board, the pull request badge on its branches, and the Git panel. A remote on a host alias from `~/.ssh/config`, such as `github.com-work`, isn't matched to any host. Gitea and Forgejo match an alias whose SSH configuration points at the instance's web address, and a remote on the instance's SSH clone address once you enter that address in **Settings → Integrations**.
+The project's remote decides which host OhPiChamber talks to. A project whose `origin` is on gitlab.com uses your GitLab account for the board, the pull request badge on its branches, and the Git panel. A remote on a host alias from `~/.ssh/config`, such as `github.com-work`, isn't matched to any host. Gitea and Forgejo match an alias whose SSH configuration points at the instance's web address, and a remote on the instance's SSH clone address once you enter that address in **Settings → Integrations**.
 
 The words follow the host. GitLab says merge request, and Gerrit says change.
 
@@ -21,7 +21,7 @@ The words follow the host. GitLab says merge request, and Gerrit says change.
    - **Forgejo**: for Codeberg, paste a personal access token; for another server, add its address first.
    - **Gerrit**: add your server's address, then your Gerrit username and an HTTP password.
 
-When it's connected, your account shows on the card. You can connect more than one account on a host and switch between them, or disconnect at any time. If the `gh` CLI is signed in on the same machine, OpenChamber can use it for GitHub too. The scopes each token needs and the versions each host needs are in [Integrations](/integrations/#gitlab-gitea-forgejo-and-gerrit).
+When it's connected, your account shows on the card. You can connect more than one account on a host and switch between them, or disconnect at any time. If the `gh` CLI is signed in on the same machine, OhPiChamber can use it for GitHub too. The scopes each token needs and the versions each host needs are in [Integrations](/integrations/#gitlab-gitea-forgejo-and-gerrit).
 
 A connected account can also be the project's [Git identity](/git-identities/), so commits carry its name and pushes over HTTPS use its token.
 
@@ -29,7 +29,7 @@ A connected account can also be the project's [Git identity](/git-identities/), 
 
 When you create a [worktree session](/worktrees/), you can start it from an issue or a pull request of the project's host:
 
-- pick an **issue** and OpenChamber names the branch after it
+- pick an **issue** and OhPiChamber names the branch after it
 - pick a **pull request** and it checks out the pull request's branch; you can include its diff so the agent has the whole change
 - pick a **Gerrit change** and it checks out the latest patchset on a branch named `change-<number>`
 
@@ -39,7 +39,7 @@ The [Issues and PRs](/issues-and-prs/) board lists the same items, with filters,
 
 ## Open and manage pull requests
 
-From the **PR** tab in the [Git panel](/git/), you can create a pull request, update it, mark a draft as ready, or merge it. OpenChamber can write the title and description from your changes.
+From the **PR** tab in the [Git panel](/git/), you can create a pull request, update it, mark a draft as ready, or merge it. OhPiChamber can write the title and description from your changes.
 
 - **GitLab**: the same tab opens merge requests. Merging offers merge and squash.
 - **Gitea** and **Forgejo**: the same as on GitHub.

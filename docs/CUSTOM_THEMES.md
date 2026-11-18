@@ -14,10 +14,10 @@ themes published only in Microsoft Marketplace may not appear.
 **Choose JSON file** imports a self-contained `.json` or `.jsonc` file. Desktop
 starts its native picker in the local `~/.vscode/extensions` folder when it exists,
 even when connected to a remote server. Browsers and mobile use their own picker.
-UI colors map to OpenChamber surfaces; general TextMate and semantic token
+UI colors map to OhPiChamber surfaces; general TextMate and semantic token
 colors populate the syntax palette, and diff colors remain separate.
 Regular imports soften borders and selected rows, adjust text for readability,
-and adapt backgrounds and status colors to OpenChamber. Syntax colors retain
+and adapt backgrounds and status colors to OhPiChamber. Syntax colors retain
 the source palette. High-contrast themes keep stronger contrast.
 The theme is saved on the connected server and selected in its light/dark mode.
 Package imports resolve JSON `include` and token files inside the downloaded VSIX.
@@ -26,17 +26,17 @@ For individual files with those references, export the active theme with
 
 Delete a custom theme using the trash icon beside it in the theme dropdown.
 This includes valid themes you added directly to the server's `themes` folder.
-Deleting a selected theme restores the standard OpenChamber theme for that mode.
+Deleting a selected theme restores the standard OhPiChamber theme for that mode.
 Built-in themes cannot be deleted. Delete and reimport a theme to update it.
 
 ## Create your own theme
 
 Save the example below as `~/.config/ohpichamber/themes/my-theme-dark.json` on
-the machine running your OpenChamber server. Create the `themes` directory if
-it does not exist. A custom OpenChamber data directory uses its own `themes`
+the machine running your OhPiChamber server. Create the `themes` directory if
+it does not exist. A custom OhPiChamber data directory uses its own `themes`
 folder. When connected to a remote server, put the file on that server.
 
-OpenChamber picks up the file within a couple of seconds. Select your theme in
+OhPiChamber picks up the file within a couple of seconds. Select your theme in
 the dark theme dropdown under **Settings → Appearance**. Saved edits apply the
 same way in every open window; **Reload themes** reads the folder at once.
 
@@ -46,7 +46,7 @@ the same display name. Choose each variant in its matching dropdown.
 
 ### Start with the base colors
 
-This is a complete theme. OpenChamber supplies omitted states, foregrounds, syntax aliases and diff backgrounds.
+This is a complete theme. OhPiChamber supplies omitted states, foregrounds, syntax aliases and diff backgrounds.
 
 ```json
 {
@@ -85,8 +85,8 @@ This is a complete theme. OpenChamber supplies omitted states, foregrounds, synt
 
 Use hex or `rgb()`/`rgba()` colors for automatic contrast adjustment. Hex alpha is supported, such as `#ffffff20`. Surfaces can be opaque or translucent; there is no required alpha value.
 
-Custom OpenChamber JSON files use your explicit colors as written. The VS Code
-import adjustments do not run on these files. OpenChamber fills in omitted
+Custom OhPiChamber JSON files use your explicit colors as written. The VS Code
+import adjustments do not run on these files. OhPiChamber fills in omitted
 roles, but you should check the contrast of colors you override yourself.
 
 ## Color roles

@@ -62,7 +62,7 @@ const createRequestSchema = z.object({
   setupCommands: setupCommandsSchema.default([]),
 });
 const CREATE_REFUSALS = {
-  projectDirectory: ['project_not_registered', 'A space is made for a project this OpenChamber knows. Add the project first, then create the space.'],
+  projectDirectory: ['project_not_registered', 'A space is made for a project this OhPiChamber knows. Add the project first, then create the space.'],
   name: ['invalid_space_name', 'A space needs a name.'],
   start: ['invalid_snapshot_mode', 'A space starts from a clean commit or with the uncommitted changes.'],
   network: ['invalid_network', 'The network of a space is allowlist or open, with a list of domain names for the allowlist.'],
@@ -518,7 +518,7 @@ export function createSpaceJourney({
         state: codeNeverArrived ? 'failed' : space.state,
         stoppedIdle: space.stoppedIdle === true,
         step: codeNeverArrived ? 'failed' : null,
-        failure: codeNeverArrived ? { code: 'space_code_never_arrived', message: 'OpenChamber closed before the code arrived. Delete the space and create it again.', details: null } : null,
+        failure: codeNeverArrived ? { code: 'space_code_never_arrived', message: 'OhPiChamber closed before the code arrived. Delete the space and create it again.', details: null } : null,
         network: record?.network ?? null,
         history: record?.history ?? 'unknown',
         setup: setup.describe(space.id, record),
@@ -649,7 +649,7 @@ export function createSpaceJourney({
       const source = asked.secret.kind === 'typed' ? { kind: 'typed' } : { kind: 'env', name: asked.secret.name };
       const secret = asked.secret.kind === 'typed' ? asked.secret.value : readHostSecret(asked.secret.name);
       if (typeof secret !== 'string' || secret === '') {
-        throw new SpaceError('secret_source_missing', `The environment variable ${asked.secret.name} is not set for OpenChamber, so there is no key to give.`);
+        throw new SpaceError('secret_source_missing', `The environment variable ${asked.secret.name} is not set for OhPiChamber, so there is no key to give.`);
       }
       grant = { kind: 'model', id: asked.provider, provider: asked.provider, upstream: asked.upstream, header: HEADER_BY_PROVIDER.get(asked.provider), source };
       window = { upstream: grant.upstream, header: grant.header, secret };

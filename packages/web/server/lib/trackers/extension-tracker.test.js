@@ -417,7 +417,7 @@ describe('session comments on an extension tracker', () => {
     await h.tracker.preferences.set({ sessionComments: true });
     expect(await post(h, { kind: 'completed', sessionId: 'ses_1', identifier: 'PROJ-1' })).toEqual({ connected: true, posted: false, skipped: 'not-started' });
     expect(await post(h, { kind: 'started', sessionId: 'ses_1', identifier: 'proj-1' })).toEqual({ connected: true, posted: true, commentId: 'c-1' });
-    expect(h.calls.at(-1).request).toMatchObject({ method: 'comments.create', input: { identifier: 'PROJ-1', body: '[OpenChamber session started](https://app.example.com/?session=ses_1)' } });
+    expect(h.calls.at(-1).request).toMatchObject({ method: 'comments.create', input: { identifier: 'PROJ-1', body: '[OhPiChamber session started](https://app.example.com/?session=ses_1)' } });
     expect(await post(h, { kind: 'started', sessionId: 'ses_1' })).toEqual({ connected: true, posted: false, skipped: 'already-posted' });
     // The runtime posts completed and failure for a started session, without an identifier or origin of its own.
     const runtime = h.tracker.sessionStatus.createRuntime();
@@ -425,7 +425,7 @@ describe('session comments on an extension tracker', () => {
     runtime.processPayload({ type: 'session.status', properties: { sessionID: 'ses_other', status: { type: 'idle' } } });
     runtime.processPayload({ type: 'session.error', properties: { sessionID: 'ses_1', error: { name: 'MessageAbortedError' } } });
     await vi.waitFor(() => expect(h.calls.filter((call) => call.request.method === 'comments.create')).toHaveLength(2));
-    expect(h.calls.at(-1).request.input.body).toBe('[OpenChamber session completed](https://app.example.com/?session=ses_1)');
+    expect(h.calls.at(-1).request.input.body).toBe('[OhPiChamber session completed](https://app.example.com/?session=ses_1)');
     runtime.stop();
     runtime.processPayload({ type: 'session.error', properties: { sessionID: 'ses_1', error: { name: 'Boom' } } });
     await new Promise((resolve) => { setTimeout(resolve, 10); });

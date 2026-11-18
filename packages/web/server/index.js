@@ -1481,7 +1481,7 @@ const openChamberControlService = createOpenChamberControlService({
  notifyUser: async (input) => {
   const settings = await readSettingsFromDiskMigrated().catch(() => null);
   if (settings?.agentNotifyToolEnabled !== true) {
-   return { status: 403, body: { error: 'The notify tool is turned off in OpenChamber settings' } };
+   return { status: 403, body: { error: 'The notify tool is turned off in OhPiChamber settings' } };
   }
   return pluginNotificationEmitter.emit(input);
  },
@@ -1748,7 +1748,7 @@ async function main(options = {}) {
   ? options.getDesktopRuntimeConfig
   : null;
 
- console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
+ console.log(`Starting OhPiChamber on port ${port === 0 ? 'auto' : port}`);
 
  // Voice enumeration is independent from route registration and Agent Service startup.
  const sayTTSCapability = detectSayTtsCapability(process);
@@ -1951,9 +1951,9 @@ async function main(options = {}) {
   getServerLabel: () => {
    try {
     const name = os.hostname();
-    return typeof name === 'string' && name.trim().length > 0 ? name.trim() : 'OpenChamber';
+    return typeof name === 'string' && name.trim().length > 0 ? name.trim() : 'OhPiChamber';
    } catch {
-    return 'OpenChamber';
+    return 'OhPiChamber';
    }
   },
   readSettingsFromDiskMigrated,

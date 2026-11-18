@@ -74,7 +74,7 @@ export const mountWorkspace = (host: HostClient, parent: Element, selected: () =
       if (!snapshot.projects.some((project) => project.id === projectId)) {
         const first = snapshot.projects[0];
         if (first) void notice.run(() => selectProject(first.id));
-        else { reset(); projectId = ''; projects.update({ value: '' }); notice.show('No projects yet', 'Add a project in OpenChamber, then return here.'); }
+        else { reset(); projectId = ''; projects.update({ value: '' }); notice.show('No projects yet', 'Add a project in OhPiChamber, then return here.'); }
       }
     });
     if (disposed) stop(); else stopProjects = stop;

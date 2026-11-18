@@ -1,11 +1,11 @@
 ---
 title: Magic Prompts
-description: Dostosuj wbudowane prompty stojące za automatycznymi przepływami OpenChamber.
+description: Dostosuj wbudowane prompty stojące za automatycznymi przepływami OhPiChamber.
 ---
 
 # Magic Prompts
 
-OpenChamber używa w tle wbudowanych promptów za każdym razem, gdy robi coś automatycznie — pisze komunikat commita, szkicuje PR, przegląda issue, rozwiązuje konflikt, podsumowuje sesję. Magic Prompts to miejsce, w którym czytasz i przepisujesz te prompty. Otwórz je w **Settings → Magic Prompts**.
+OhPiChamber używa w tle wbudowanych promptów za każdym razem, gdy robi coś automatycznie — pisze komunikat commita, szkicuje PR, przegląda issue, rozwiązuje konflikt, podsumowuje sesję. Magic Prompts to miejsce, w którym czytasz i przepisujesz te prompty. Otwórz je w **Settings → Magic Prompts**.
 
 Do normalnego użytku ta strona nie jest potrzebna. Sięgnij po nią, gdy chcesz, by przepływ zachowywał się inaczej — powiedzmy komunikaty commitów w określonym stylu.
 
@@ -15,7 +15,7 @@ Do normalnego użytku ta strona nie jest potrzebna. Sięgnij po nią, gdy chcesz
 2. Wybierz prompt z grup w pasku bocznym — Git, Planning i Session.
 3. Edytuj tekst i zapisz.
 
-Niektóre prompty mają część widoczną (wiadomość, którą zobaczysz) i część z instrukcjami (ukryte wskazówki dla agenta). Prompty mogą zawierać `{{placeholders}}`, które OpenChamber uzupełnia, jak diff czy tytuł issue — zostaw je na miejscu.
+Niektóre prompty mają część widoczną (wiadomość, którą zobaczysz) i część z instrukcjami (ukryte wskazówki dla agenta). Prompty mogą zawierać `{{placeholders}}`, które OhPiChamber uzupełnia, jak diff czy tytuł issue — zostaw je na miejscu.
 
 ## Reset
 
@@ -23,7 +23,7 @@ Zmieniłeś zdanie? Każdy prompt ma **reset to default**, a jest też **reset a
 
 ## Prompty projektu
 
-Prompt może też mieć nadpisanie dla jednego projektu. OpenChamber używa nadpisania projektu, jeśli istnieje, w przeciwnym razie twojego nadpisania globalnego, a jeśli i tego nie ma, tekstu wbudowanego. Zapisane nadpisanie liczy się nawet wtedy, gdy jest puste.
+Prompt może też mieć nadpisanie dla jednego projektu. OhPiChamber używa nadpisania projektu, jeśli istnieje, w przeciwnym razie twojego nadpisania globalnego, a jeśli i tego nie ma, tekstu wbudowanego. Zapisane nadpisanie liczy się nawet wtedy, gdy jest puste.
 
 Aby je dodać, wybierz projekt w selektorze na górze paska bocznego, a potem **Projekt** w sekcji **Zakres**. Kliknij **Save** pod każdym blokiem, który zmieniasz. Przyciski resetu zmieniają tylko otwarty zakres. W **Projekt** przyciski **Usuń nadpisanie projektu** i **Usuń wszystkie nadpisania projektu** przywracają twoje nadpisanie globalne albo tekst wbudowany. Zapisanie tekstu wbudowanego w **Globalne** usuwa twoje nadpisanie globalne. W **Projekt** ten tekst zostaje zapisany, więc projekt zachowuje tekst wbudowany, nawet gdy twoje nadpisanie globalne mówi coś innego.
 

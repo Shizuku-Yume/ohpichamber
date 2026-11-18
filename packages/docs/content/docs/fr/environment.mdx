@@ -1,32 +1,32 @@
 ---
 title: Variables d’environnement
-description: Configurez OpenChamber avec des variables d’environnement.
+description: Configurez OhPiChamber avec des variables d’environnement.
 ---
 
 # Variables d’environnement
 
-OpenChamber lit ces variables d’environnement au démarrage. Pour les services de démarrage, `ohpichamber startup enable` capture l’environnement actuel par défaut ; relancez donc la commande après avoir changé les variables que le service doit utiliser.
+OhPiChamber lit ces variables d’environnement au démarrage. Pour les services de démarrage, `ohpichamber startup enable` capture l’environnement actuel par défaut ; relancez donc la commande après avoir changé les variables que le service doit utiliser.
 
 ## Variables pour les sessions d’agent, Git et le terminal
 
-Pour donner vos propres variables aux sessions d’agent, à Git, au terminal et aux [actions de projet](/fr/project-actions/), comme un jeton d’API ou l’adresse d’une base de données, ajoutez-les dans **Paramètres → Général → Variables d’environnement** plutôt que de les exporter avant de lancer OpenChamber. Les valeurs restent sur la machine qui fait tourner OpenChamber, dans `environment.json` dans le dossier de données, et seul votre utilisateur peut les lire. Les Paramètres n’affichent plus jamais une valeur : vous pouvez la remplacer ou la supprimer, pas la relire.
+Pour donner vos propres variables aux sessions d’agent, à Git, au terminal et aux [actions de projet](/fr/project-actions/), comme un jeton d’API ou l’adresse d’une base de données, ajoutez-les dans **Paramètres → Général → Variables d’environnement** plutôt que de les exporter avant de lancer OhPiChamber. Les valeurs restent sur la machine qui fait tourner OhPiChamber, dans `environment.json` dans le dossier de données, et seul votre utilisateur peut les lire. Les Paramètres n’affichent plus jamais une valeur : vous pouvez la remplacer ou la supprimer, pas la relire.
 
 - Les sessions d’agent les reçoivent au démarrage.
 - Git, le terminal et les actions de projet les reçoivent à leur prochaine exécution.
 
 Un projet peut ajouter ses propres variables, ou une commande qui les affiche comme `direnv export json`, dans **Paramètres → Projets**. Voir [Projets](/fr/projects/#environnement-du-projet).
 
-Tout ce qui suit est lu par OpenChamber lui-même au démarrage.
+Tout ce qui suit est lu par OhPiChamber lui-même au démarrage.
 
-## Serveur OpenChamber
+## Serveur OhPiChamber
 
 ### `OPENCHAMBER_HOST`
 
-Adresse d’écoute du serveur web OpenChamber. Utilisez `0.0.0.0` pour autoriser l’accès depuis d’autres machines.
+Adresse d’écoute du serveur web OhPiChamber. Utilisez `0.0.0.0` pour autoriser l’accès depuis d’autres machines.
 
 ### `OPENCHAMBER_LAN_URL`
 
-L’adresse à laquelle les autres appareils de votre réseau joignent OpenChamber, par exemple `http://192.168.1.20:3000`. Les liens et QR codes d’appairage la proposent à la place de l’adresse détectée par OpenChamber. Définissez-la quand cette détection se trompe, par exemple dans Docker, où OpenChamber ne voit que l’adresse interne du conteneur.
+L’adresse à laquelle les autres appareils de votre réseau joignent OhPiChamber, par exemple `http://192.168.1.20:3000`. Les liens et QR codes d’appairage la proposent à la place de l’adresse détectée par OhPiChamber. Définissez-la quand cette détection se trompe, par exemple dans Docker, où OhPiChamber ne voit que l’adresse interne du conteneur.
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,19 +42,19 @@ Durée d’une connexion, en jours, sur un appareil auquel vous faites confiance
 
 ### `OPENCHAMBER_API_ONLY`
 
-Démarre OpenChamber en mode headless lorsqu’il vaut `true` ou `1`. Les routes API restent disponibles pour les clients desktop et mobile, mais l’UI navigateur n’est pas servie.
+Démarre OhPiChamber en mode headless lorsqu’il vaut `true` ou `1`. Les routes API restent disponibles pour les clients desktop et mobile, mais l’UI navigateur n’est pas servie.
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-Origines autorisées à afficher OpenChamber dans un cadre sur leur propre page, séparées par des espaces, par exemple `https://dash.example.com`. `*` autorise n’importe quel site. Par défaut, seuls OpenChamber et ses apps desktop et mobile peuvent l’intégrer, ce qui empêche d’autres sites de superposer ses boutons.
+Origines autorisées à afficher OhPiChamber dans un cadre sur leur propre page, séparées par des espaces, par exemple `https://dash.example.com`. `*` autorise n’importe quel site. Par défaut, seuls OhPiChamber et ses apps desktop et mobile peuvent l’intégrer, ce qui empêche d’autres sites de superposer ses boutons.
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Remplace le dossier de données OpenChamber. La valeur par défaut est `~/.config/ohpichamber`.
+Remplace le dossier de données OhPiChamber. La valeur par défaut est `~/.config/ohpichamber`.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Déplace les dossiers de chat gérés qu'OpenChamber crée pour les chats sans projet. La valeur par défaut est `~/.config/ohpichamber/chats`. Les chats existants ne sont pas déplacés.
+Déplace les dossiers de chat gérés qu'OhPiChamber crée pour les chats sans projet. La valeur par défaut est `~/.config/ohpichamber/chats`. Les chats existants ne sont pas déplacés.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -72,21 +72,21 @@ Active les logs HTTP détaillés lorsqu’il vaut `true` ou `1`.
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-Fait passer par un proxy les requêtes sortantes propres à OpenChamber, comme les limites d’utilisation et les catalogues de skills. Les noms en minuscules fonctionnent aussi. Les hôtes de `NO_PROXY` se connectent directement, et `localhost`, `127.0.0.1` et `::1` toujours, donc les retours de connexion et les connexions locales continuent de fonctionner.
+Fait passer par un proxy les requêtes sortantes propres à OhPiChamber, comme les limites d’utilisation et les catalogues de skills. Les noms en minuscules fonctionnent aussi. Les hôtes de `NO_PROXY` se connectent directement, et `localhost`, `127.0.0.1` et `::1` toujours, donc les retours de connexion et les connexions locales continuent de fonctionner.
 
 ## Terminal et Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-Exécutable shell utilisé pour les sessions de terminal OpenChamber.
+Exécutable shell utilisé pour les sessions de terminal OhPiChamber.
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-Exécutable Git utilisé par les fonctionnalités Git d’OpenChamber.
+Exécutable Git utilisé par les fonctionnalités Git d’OhPiChamber.
 
 ### `GIT_BINARY`
 
-Autre exécutable Git de remplacement. Préférez `OPENCHAMBER_GIT_BINARY` pour une configuration propre à OpenChamber.
+Autre exécutable Git de remplacement. Préférez `OPENCHAMBER_GIT_BINARY` pour une configuration propre à OhPiChamber.
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -96,7 +96,7 @@ Durée de vie, en millisecondes, du cache de lecture des fichiers adossés à Gi
 
 ### `OPENAI_API_KEY`
 
-Clé API utilisée par les fonctionnalités vocales d’OpenChamber quand elles appellent OpenAI lui-même. Elle n’est jamais envoyée à un serveur compatible OpenAI personnalisé : donnez à ce serveur sa propre clé dans les Réglages.
+Clé API utilisée par les fonctionnalités vocales d’OhPiChamber quand elles appellent OpenAI lui-même. Elle n’est jamais envoyée à un serveur compatible OpenAI personnalisé : donnez à ce serveur sa propre clé dans les Réglages.
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -104,15 +104,15 @@ Autorise les URL de base compatibles OpenAI distantes pour les fonctionnalités 
 
 ### `NGROK_AUTHTOKEN`
 
-Token d’authentification ngrok utilisé par les commandes de tunnel OpenChamber. Vous pouvez aussi configurer ngrok avec `ngrok config add-authtoken <token>`.
+Token d’authentification ngrok utilisé par les commandes de tunnel OhPiChamber. Vous pouvez aussi configurer ngrok avec `ngrok config add-authtoken <token>`.
 
 ## Helpers runtime
 
 ### `BUN_BINARY`
 
-Exécutable Bun qu’OpenChamber doit utiliser lorsqu’il lance des processus daemon.
+Exécutable Bun qu’OhPiChamber doit utiliser lorsqu’il lance des processus daemon.
 
 ### `BUN_INSTALL`
 
-Racine d’installation de Bun. OpenChamber l’utilise pour trouver `bin/bun` lors du démarrage des daemons et des mises à jour.
+Racine d’installation de Bun. OhPiChamber l’utilise pour trouver `bin/bun` lors du démarrage des daemons et des mises à jour.
 

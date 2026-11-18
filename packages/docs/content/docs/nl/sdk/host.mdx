@@ -1,6 +1,6 @@
 ---
 title: Host-API
-description: Alle connectHost-methoden voor extensies, de gegevens die OpenChamber doorgeeft, limieten en foutcodes.
+description: Alle connectHost-methoden voor extensies, de gegevens die OhPiChamber doorgeeft, limieten en foutcodes.
 ---
 
 # Host-API
@@ -13,11 +13,11 @@ import { connectHost, HostRequestError } from "ohpichamber-sdk";
 const host = connectHost();
 ```
 
-`connectHost` werpt `HOST_UNAVAILABLE` als er geen `window` is. Buiten OpenChamber geeft het een client terug waarvan elke aanroep met `HOST_UNAVAILABLE` wordt geweigerd. Roep `dispose()` aan wanneer u de pagina opruimt. Nog lopende aanroepen worden dan met dezelfde code afgewezen.
+`connectHost` werpt `HOST_UNAVAILABLE` als er geen `window` is. Buiten OhPiChamber geeft het een client terug waarvan elke aanroep met `HOST_UNAVAILABLE` wordt geweigerd. Roep `dispose()` aan wanneer u de pagina opruimt. Nog lopende aanroepen worden dan met dezelfde code afgewezen.
 
-## Wat OpenChamber doorgeeft
+## Wat OhPiChamber doorgeeft
 
-`onReady` wordt aangeroepen met de eerste momentopname en telkens wanneer OpenChamber deze ververst.
+`onReady` wordt aangeroepen met de eerste momentopname en telkens wanneer OhPiChamber deze ververst.
 
 Het is geen eenmalige callback voor het opbouwen van de interface. Bouw uw UI en registreer abonnementen één keer. Gebruik latere momentopnamen om thema en context bij te werken zonder invoervelden of concepten te vervangen. Het voorbeeld bij [UI-kit](/nl/sdk/ui/) laat zien hoe u voorkomt dat de interface opnieuw wordt opgebouwd. Veldlisteners zoals `onConnection` geven hun huidige waarde meteen door en kunnen dezelfde waarde opnieuw ontvangen bij een verversing. Vergelijk de velden waarvan uw gegevens afhangen voordat u een nieuw verzoek start en negeer antwoorden van inmiddels achterhaalde verzoeken.
 
@@ -65,7 +65,7 @@ Toegangstokens verschijnen hier nooit, ook niet in een `request`-resultaat.
 | `generate({ prompt, system?, maxOutputTokens? })` | genereert eenmalig tekst met het Small Model; geeft `{ text }` terug en vereist `model` |
 | `onResolve(handler)` | registreert de afhandeling van slash-opdrachten; ontvangt `{ command, args }` en geeft een te koppelen item of `null` terug |
 | `setBadge(count)` | zet een stip op het balkpictogram en toont het getal van 0 tot 999 in de tooltip; `null` wist het |
-| `openCommit(sha)` | opent de diffweergave voor de commit in het huidige project; `sha` heeft 7 tot 64 hexadecimale tekens; OpenChamber leest de commit zelf |
+| `openCommit(sha)` | opent de diffweergave voor de commit in het huidige project; `sha` heeft 7 tot 64 hexadecimale tekens; OhPiChamber leest de commit zelf |
 | `setHeight(px)` | stelt de hoogte van uw Werkstatus-onderdeel in, begrensd tot 24 tot 320 pixels; grotere inhoud scrolt binnen de pagina; elders genegeerd |
 | `onFileOpen(listener)` | voor editors: ontvangt `{ path, name, readOnly }` plus `encoding: "text"` met `content`, of `encoding: "binary"` met `bytes`; activeert ook opslaan via Cmd/Ctrl+S in de pagina |
 | `onFileSnapshot(handler)` | voor editors: geeft het volledige bewerkte bestand als `{ content, version }` of `{ bytes, version }` terug; aangeroepen bij opslaan en vóór wisselen naar bronweergave of volledig scherm |
@@ -108,7 +108,7 @@ await host.startSession({
 });
 ```
 
-`providerId` is uw paneel-ID. OpenChamber overschrijft deze hoe dan ook met uw ID. `id` is uw eigen item-ID. `kind` is standaard `issue`, of `pull`. `text` is optionele modelcontext van 1 tot 16000 tekens na trimmen. `data` is eigen optionele JSON, bijvoorbeeld status of reacties, maximaal 16000 tekens na serialisatie. OpenChamber bewaart die bij het gekoppelde item en geeft haar ongewijzigd terug in `ctx.item` als de gebruiker erop klikt. Ze gaat nooit naar het model.
+`providerId` is uw paneel-ID. OhPiChamber overschrijft deze hoe dan ook met uw ID. `id` is uw eigen item-ID. `kind` is standaard `issue`, of `pull`. `text` is optionele modelcontext van 1 tot 16000 tekens na trimmen. `data` is eigen optionele JSON, bijvoorbeeld status of reacties, maximaal 16000 tekens na serialisatie. OhPiChamber bewaart die bij het gekoppelde item en geeft haar ongewijzigd terug in `ctx.item` als de gebruiker erop klikt. Ze gaat nooit naar het model.
 
 `startSession` accepteert `projectId` zonder het huidige project te wisselen. Laat `worktree` weg voor de doelmap, gebruik `true` voor een gegenereerde worktree, `{ kind: "existing", directory }` voor een bekende worktree of `{ kind: "new", name?, baseBranch? }` voor een benoemde nieuwe worktree. De naam bepaalt zowel de branch als de worktree. `navigation` is standaard `"preserve"`; gebruik `"open"` om de nieuwe chat te selecteren. Model, agent en variant voor het eerste bericht worden vastgelegd bij het begin van het aanmaken.
 
@@ -183,9 +183,9 @@ Extra toestemming is niet nodig. De opslag hoort bij deze extensie op de verbond
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path` begint met `/` en bevat geen protocol of host. OpenChamber voegt het toe aan `apiOrigin` uit uw manifest en voegt de `Authorization`-header toe. Tokenintegraties versturen het geplakte token ongewijzigd, als `Bearer <token>` bij `token.scheme: "bearer"`, of als `Basic base64(username:token)` bij `"basic"`. OAuth- en Linear-integraties gebruiken altijd `Bearer`. Het resultaat is `{ status, body }`. De body is tekst; JSON verwerkt u zelf.
+`path` begint met `/` en bevat geen protocol of host. OhPiChamber voegt het toe aan `apiOrigin` uit uw manifest en voegt de `Authorization`-header toe. Tokenintegraties versturen het geplakte token ongewijzigd, als `Bearer <token>` bij `token.scheme: "bearer"`, of als `Basic base64(username:token)` bij `"basic"`. OAuth- en Linear-integraties gebruiken altijd `Bearer`. Het resultaat is `{ status, body }`. De body is tekst; JSON verwerkt u zelf.
 
-Een Linear-integratie mag ook `GET /api/linear/issues/get` gebruiken. OpenChamber beantwoordt dat via de eigen Linear-route.
+Een Linear-integratie mag ook `GET /api/linear/issues/get` gebruiken. OhPiChamber beantwoordt dat via de eigen Linear-route.
 
 Geen antwoord binnen 20 seconden geeft `HOST_TIMEOUT`.
 
@@ -201,7 +201,7 @@ try {
 
 ## serviceRequest
 
-Als het manifest `contributes.service` opgeeft, start OpenChamber dat proces. Uw pagina spreekt ermee via een vergelijkbare aanroep en opent nooit zelf de socket.
+Als het manifest `contributes.service` opgeeft, start OhPiChamber dat proces. Uw pagina spreekt ermee via een vergelijkbare aanroep en opent nooit zelf de socket.
 
 ```ts
 const status = await host.serviceStatus();
@@ -212,7 +212,7 @@ Voor `path` gelden dezelfde regels als bij `request`. Een service declareren voe
 
 ## Sessiegebeurtenissen
 
-Uw pagina weet alleen van een sessie zolang die open is. Uw service kan meer weten: geef `contributes.sessionEvents` op naast `contributes.service`, en OpenChamber stuurt de gebeurtenissen die u opgeeft naar de service, uit elk project, of er nu een venster open is of niet.
+Uw pagina weet alleen van een sessie zolang die open is. Uw service kan meer weten: geef `contributes.sessionEvents` op naast `contributes.service`, en OhPiChamber stuurt de gebeurtenissen die u opgeeft naar de service, uit elk project, of er nu een venster open is of niet.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host" },
@@ -238,11 +238,11 @@ if (url.pathname === SESSION_EVENTS_PATH) {
 }
 ```
 
-De gebeurtenissen van elk project worden verstuurd. Vergelijk `event.project.directory` met uw eigen instellingen en antwoord voor de rest met `{ "ok": true }`. Bezorging gebeurt hoogstens één keer en in volgorde, één verzoek tegelijk. Een mislukt antwoord laat uw gebeurtenissen 30 seconden vallen, en niets wordt opnieuw verstuurd nadat OpenChamber of uw service niet bereikbaar was. De service heeft hiervoor geen paneel nodig. Het voorbeeld `session-events-log` schrijft elke gebeurtenis naar een bestand.
+De gebeurtenissen van elk project worden verstuurd. Vergelijk `event.project.directory` met uw eigen instellingen en antwoord voor de rest met `{ "ok": true }`. Bezorging gebeurt hoogstens één keer en in volgorde, één verzoek tegelijk. Een mislukt antwoord laat uw gebeurtenissen 30 seconden vallen, en niets wordt opnieuw verstuurd nadat OhPiChamber of uw service niet bereikbaar was. De service heeft hiervoor geen paneel nodig. Het voorbeeld `session-events-log` schrijft elke gebeurtenis naar een bestand.
 
-## OpenChamber aanroepen vanuit uw service
+## OhPiChamber aanroepen vanuit uw service
 
-Een service kan handelen zonder dat er een venster open is. `createServiceHost` is de weg terug naar OpenChamber:
+Een service kan handelen zonder dat er een venster open is. `createServiceHost` is de weg terug naar OhPiChamber:
 
 ```ts
 import { createServiceHost } from 'ohpichamber-sdk';
@@ -265,7 +265,7 @@ Om de verzoeken van de agent ergens anders heen te brengen, zoals een chat-app, 
 
 ## Draaien zonder dat iemand erom vraagt
 
-Een service start bij het eerste verzoek, en de service van een rol stopt bij inactiviteit. `service.keepRunning: true` start hem samen met OpenChamber en brengt hem terug als hij stopt. `service.schedule` wekt hem volgens een schema:
+Een service start bij het eerste verzoek, en de service van een rol stopt bij inactiviteit. `service.keepRunning: true` start hem samen met OhPiChamber en brengt hem terug als hij stopt. `service.schedule` wekt hem volgens een schema:
 
 ```json
 "service": {
@@ -276,7 +276,7 @@ Een service start bij het eerste verzoek, en de service van een rol stopt bij in
 }
 ```
 
-Een run is één `POST /schedule`. Lees hem met `readServiceScheduleRequest` en antwoord met 200. Een run die is gemist terwijl OpenChamber niet draaide, vervalt. Een service die externe gebeurtenissen nodig heeft, houdt een eigen verbinding open of pollt.
+Een run is één `POST /schedule`. Lees hem met `readServiceScheduleRequest` en antwoord met 200. Een run die is gemist terwijl OhPiChamber niet draaide, vervalt. Een service die externe gebeurtenissen nodig heeft, houdt een eigen verbinding open of pollt.
 
 ## Rijen in het @-menu
 
@@ -305,7 +305,7 @@ host.onBlock(({ args, answered }) => draw(args.key, answered));
 button.onclick = () => host.answerBlock('Close this ticket');
 ```
 
-Stel `"answers": true` in op een component die dit doet. Agenten krijgen de instructie ermee te vragen in plaats van met de ingebouwde keuze wanneer de beschrijving past, en een pagina die op een antwoord wacht, laat de knop Versturen weg. Onder zo'n blok biedt OpenChamber hetzelfde notitieveld als bij zijn eigen formulieren: de agent leest de notitie samen met uw antwoord, en een notitie op zich is ook een antwoord.
+Stel `"answers": true` in op een component die dit doet. Agenten krijgen de instructie ermee te vragen in plaats van met de ingebouwde keuze wanneer de beschrijving past, en een pagina die op een antwoord wacht, laat de knop Versturen weg. Onder zo'n blok biedt OhPiChamber hetzelfde notitieveld als bij zijn eigen formulieren: de agent leest de notitie samen met uw antwoord, en een notitie op zich is ook een antwoord.
 
 De argumenten worden door een model geschreven, dus tekst van een webpagina of ticket kan ze sturen. Behandel ze als onbetrouwbaar en doe niets met neveneffecten totdat de gebruiker klikt.
 
@@ -322,9 +322,9 @@ Een service kan de meldingen van de gebruiker bezorgen, naast de desktop en de t
 }
 ```
 
-OpenChamber maakt uit die beschrijving een accountkaart voor het kanaal bij Instellingen → Integraties en bewaart het account. De gebruiker verbindt het daar, het token blijft in OpenChamber en uw service ziet het nooit. Zodra een account is verbonden, gaat elke melding die OpenChamber naar de telefoon zou sturen ook naar uw service, volgens de meldingsinstellingen van de gebruiker en alleen zolang er geen venster zichtbaar is, tenzij de gebruiker heeft gekozen om altijd een melding te krijgen. De extensie pauzeren stopt het.
+OhPiChamber maakt uit die beschrijving een accountkaart voor het kanaal bij Instellingen → Integraties en bewaart het account. De gebruiker verbindt het daar, het token blijft in OhPiChamber en uw service ziet het nooit. Zodra een account is verbonden, gaat elke melding die OhPiChamber naar de telefoon zou sturen ook naar uw service, volgens de meldingsinstellingen van de gebruiker en alleen zolang er geen venster zichtbaar is, tenzij de gebruiker heeft gekozen om altijd een melding te krijgen. De extensie pauzeren stopt het.
 
-OpenChamber stuurt drie aanroepen door naar `POST /notifications`: `auth.probe` (is dit een server waaraan u bezorgt), `auth.verify` (van wie is dit token) en `notify` (één melding). Lees elke aanroep met `readNotificationsProviderRequest` en bereik de server van het kanaal alleen via de outbound-helper, die uw verzoek met de handle van de aanroep naar OpenChamber stuurt. OpenChamber voegt het token toe en houdt het verzoek op de server van het account.
+OhPiChamber stuurt drie aanroepen door naar `POST /notifications`: `auth.probe` (is dit een server waaraan u bezorgt), `auth.verify` (van wie is dit token) en `notify` (één melding). Lees elke aanroep met `readNotificationsProviderRequest` en bereik de server van het kanaal alleen via de outbound-helper, die uw verzoek met de handle van de aanroep naar OhPiChamber stuurt. OhPiChamber voegt het token toe en houdt het verzoek op de server van het account.
 
 ```ts
 import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
@@ -352,7 +352,7 @@ Naar welke ruimte of welk kanaal een project gaat, bepaalt uw extensie zelf: de 
 
 ## Trackers
 
-Een service kan een tracker voor werkitems zijn naast Linear: geef `provides: ["tracker"]` op en beschrijf de tracker in `contributes.tracker`. OpenChamber zet hem dan naast Linear overal waar trackers verschijnen, alleen op basis van het manifest, nog voordat de service ooit draait.
+Een service kan een tracker voor werkitems zijn naast Linear: geef `provides: ["tracker"]` op en beschrijf de tracker in `contributes.tracker`. OhPiChamber zet hem dan naast Linear overal waar trackers verschijnen, alleen op basis van het manifest, nog voordat de service ooit draait.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["tracker"] },
@@ -368,9 +368,9 @@ Een service kan een tracker voor werkitems zijn naast Linear: geef `provides: ["
 }
 ```
 
-De gebruiker verbindt accounts op de kaart van de tracker onder Extensieaccounts: een token, of inloggen in de browser wanneer u `auth.oauth` opgeeft (OpenChamber voert het inloggen uit met de client-ID die de gebruiker invoert en bewaart de tokens). Uw service ziet nooit inloggegevens. `urls.item` zijn sjablonen voor het adres van een item, met `{id}` voor de identificatie (ook als `?name={id}` wanneer die in de query meereist); OpenChamber compileert ze zodat geplakte links gekoppelde items worden. `identifier` zegt hoe de sleutel eruitziet: `key-number` (`PROJ-42`), `number` of `short-code`.
+De gebruiker verbindt accounts op de kaart van de tracker onder Extensieaccounts: een token, of inloggen in de browser wanneer u `auth.oauth` opgeeft (OhPiChamber voert het inloggen uit met de client-ID die de gebruiker invoert en bewaart de tokens). Uw service ziet nooit inloggegevens. `urls.item` zijn sjablonen voor het adres van een item, met `{id}` voor de identificatie (ook als `?name={id}` wanneer die in de query meereist); OhPiChamber compileert ze zodat geplakte links gekoppelde items worden. `identifier` zegt hoe de sleutel eruitziet: `key-number` (`PROJ-42`), `number` of `short-code`.
 
-OpenChamber stuurt negen aanroepen door naar `POST /tracker`: `auth.probe` en `auth.verify`, de leesaanroepen `items.list`, `items.get`, `items.liveSummaries`, `states.list` en `containers.list`, en de schrijfaanroepen `items.updateState` en `comments.create`. Lees elke aanroep met `readTrackerProviderRequest`, antwoord in de neutrale itemvormen en bereik de server van de tracker alleen via de outbound-helper, die uw verzoek met de handle van de aanroep naar OpenChamber stuurt; OpenChamber voegt de inloggegevens toe en houdt het verzoek op de server van het account. De handle van een leesaanroep verstuurt alleen `GET`.
+OhPiChamber stuurt negen aanroepen door naar `POST /tracker`: `auth.probe` en `auth.verify`, de leesaanroepen `items.list`, `items.get`, `items.liveSummaries`, `states.list` en `containers.list`, en de schrijfaanroepen `items.updateState` en `comments.create`. Lees elke aanroep met `readTrackerProviderRequest`, antwoord in de neutrale itemvormen en bereik de server van de tracker alleen via de outbound-helper, die uw verzoek met de handle van de aanroep naar OhPiChamber stuurt; OhPiChamber voegt de inloggegevens toe en houdt het verzoek op de server van het account. De handle van een leesaanroep verstuurt alleen `GET`.
 
 ```ts
 import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
@@ -390,20 +390,20 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 }
 ```
 
-Wanneer de gebruiker sessiereacties inschakelt, roept OpenChamber `comments.create` aan met "session started", "completed" of "failed" en een link naar de sessie, elk één keer; de reactie draagt verder niets. Het voorbeeld `tracker-provider` is een complete tracker met een nepserver om het tegen te testen.
+Wanneer de gebruiker sessiereacties inschakelt, roept OhPiChamber `comments.create` aan met "session started", "completed" of "failed" en een link naar de sessie, elk één keer; de reactie draagt verder niets. Het voorbeeld `tracker-provider` is een complete tracker met een nepserver om het tegen te testen.
 
 ## Verbruiksproviders
 
-Een service kan het verbruik naast de ingebouwde providers rapporteren: geef `provides: ["quota"]` op en noem in `contributes.quota.providers` de OpenCode-providers waarvan hij de aanmeldgegevens nodig heeft. OpenChamber noemt de provider `ext-<panel.id>`, tekent zijn kaart met de naam en het pictogram van de extensie en bevraagt hem zoals een ingebouwde provider.
+Een service kan het verbruik naast de ingebouwde providers rapporteren: geef `provides: ["quota"]` op en noem in `contributes.quota.providers` de OpenCode-providers waarvan hij de aanmeldgegevens nodig heeft. OhPiChamber noemt de provider `ext-<panel.id>`, tekent zijn kaart met de naam en het pictogram van de extensie en bevraagt hem zoals een ingebouwde provider.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, vraagt opnieuw. Bij elke vernieuwing stuurt OpenChamber één aanroep, `usage.read`, naar `POST /quota`, met in `input.credentials` de aanmeldgegevens die OpenCode bewaart voor elke genoemde provider waarvoor het die heeft (een API-sleutel of de tokens van een browseraanmelding) en verder niets uit de opslag. Een genoemde provider waarvoor OpenCode geen aanmeldgegevens heeft, wordt als niet ingesteld getoond en de service wordt niet aangeroepen; een lege lijst is toegestaan, voor een provider waarvan de sleutel in de eigen instellingen van de extensie staat.
+De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, vraagt opnieuw. Bij elke vernieuwing stuurt OhPiChamber één aanroep, `usage.read`, naar `POST /quota`, met in `input.credentials` de aanmeldgegevens die OpenCode bewaart voor elke genoemde provider waarvoor het die heeft (een API-sleutel of de tokens van een browseraanmelding) en verder niets uit de opslag. Een genoemde provider waarvoor OpenCode geen aanmeldgegevens heeft, wordt als niet ingesteld getoond en de service wordt niet aangeroepen; een lege lijst is toegestaan, voor een provider waarvan de sleutel in de eigen instellingen van de extensie staat.
 
-Lees de body met `readQuotaProviderRequest` en antwoord `{ ok: true, data }` met het resultaat dat een ingebouwde provider berekent: `ok`, `configured`, `error`, `planLabel` en `usage.windows` per vensternaam, elk met `usedPercent`, `windowSeconds`, `resetAt` (epoch in milliseconden) en een optionele `valueLabel` of `value`, plus `usage.models` voor vensters per model. OpenChamber leidt het resterende deel, de aftelling tot de reset en de opgemaakte tekst af, zodat de kaart overeenkomt met die van een ingebouwde provider.
+Lees de body met `readQuotaProviderRequest` en antwoord `{ ok: true, data }` met het resultaat dat een ingebouwde provider berekent: `ok`, `configured`, `error`, `planLabel` en `usage.windows` per vensternaam, elk met `usedPercent`, `windowSeconds`, `resetAt` (epoch in milliseconden) en een optionele `valueLabel` of `value`, plus `usage.models` voor vensters per model. OhPiChamber leidt het resterende deel, de aftelling tot de reset en de opgemaakte tekst af, zodat de kaart overeenkomt met die van een ingebouwde provider.
 
 ```ts
 import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
@@ -449,9 +449,9 @@ Mislukte aanroepen werpen `HostRequestError`. `code` is een van de onderstaande 
 
 | Code | Wanneer |
 | --- | --- |
-| `HOST_UNAVAILABLE` | geen window, niet binnen OpenChamber of `dispose()` is uitgevoerd |
+| `HOST_UNAVAILABLE` | geen window, niet binnen OhPiChamber of `dispose()` is uitgevoerd |
 | `HOST_TIMEOUT` | geen antwoord binnen 20 seconden |
-| `HOST_REJECTED` | OpenChamber weigert of antwoordt met een code die deze SDK niet kent |
+| `HOST_REJECTED` | OhPiChamber weigert of antwoordt met een code die deze SDK niet kent |
 | `DISCONNECTED` | geen token of Linear-verbinding voor de integratie |
 | `BAD_PATH` | ongeldig pad of poging buiten de toegestane origin te gaan |
 | `NO_INTEGRATION` | het manifest bevat geen `integration` |
@@ -467,7 +467,7 @@ Mislukte aanroepen werpen `HostRequestError`. `code` is een van de onderstaande 
 | `DENIED` | het besturingssysteem weigert de bestandsbewerking |
 | `NO_MODEL` | `generate` zonder beschikbaar Small Model |
 | `MODEL_FAILED` | het Small Model gaf een fout |
-| `UNSUPPORTED` | deze OpenChamber kan de aanroep niet uitvoeren, bijvoorbeeld `openCommit` zonder diffweergave |
+| `UNSUPPORTED` | deze OhPiChamber kan de aanroep niet uitvoeren, bijvoorbeeld `openCommit` zonder diffweergave |
 
 ## Zie ook
 

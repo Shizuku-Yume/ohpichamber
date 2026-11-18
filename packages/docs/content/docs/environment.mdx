@@ -1,32 +1,32 @@
 ---
 title: Environment Variables
-description: Configure OpenChamber with environment variables.
+description: Configure OhPiChamber with environment variables.
 ---
 
 # Environment Variables
 
-OpenChamber reads these environment variables at startup. For startup services, `ohpichamber startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use. Variables OpenChamber itself set in the shell you run it from, such as the desktop app's terminal or an agent's shell, stay out of the service; your own exports carry over from there too, unless you re-export a name OpenChamber already set in that shell, which a regular terminal avoids.
+OhPiChamber reads these environment variables at startup. For startup services, `ohpichamber startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use. Variables OhPiChamber itself set in the shell you run it from, such as the desktop app's terminal or an agent's shell, stay out of the service; your own exports carry over from there too, unless you re-export a name OhPiChamber already set in that shell, which a regular terminal avoids.
 
 ## Variables for agent sessions, Git and the terminal
 
-To give agent sessions, Git, the terminal and [project actions](/project-actions/) variables of your own, such as an API token or a database address, add them in **Settings → General → Environment variables** instead of exporting them before OpenChamber starts. Values stay on the machine that runs OpenChamber, in `environment.json` in the data directory, readable only by your user. Settings never shows a value again: you can replace or remove it, not read it back.
+To give agent sessions, Git, the terminal and [project actions](/project-actions/) variables of your own, such as an API token or a database address, add them in **Settings → General → Environment variables** instead of exporting them before OhPiChamber starts. Values stay on the machine that runs OhPiChamber, in `environment.json` in the data directory, readable only by your user. Settings never shows a value again: you can replace or remove it, not read it back.
 
 - Agent sessions receive them when started.
 - Git, the terminal and project actions get them on their next run.
 
 A project can add its own variables, or a command such as `direnv export json` that prints them, in **Settings → Projects**. See [Projects](/projects/#project-environment).
 
-Everything below is read by OpenChamber itself at startup.
+Everything below is read by OhPiChamber itself at startup.
 
-## OpenChamber server
+## OhPiChamber server
 
 ### `OPENCHAMBER_HOST`
 
-Bind address for the OpenChamber web server. Use `0.0.0.0` to allow access from other machines.
+Bind address for the OhPiChamber web server. Use `0.0.0.0` to allow access from other machines.
 
 ### `OPENCHAMBER_LAN_URL`
 
-The address other devices on your network use to reach OpenChamber, such as `http://192.168.1.20:3000`. Pairing links and QR codes offer it instead of the address OpenChamber detects itself. Set it when that guess is wrong, for example in Docker, where OpenChamber only sees the container's internal address.
+The address other devices on your network use to reach OhPiChamber, such as `http://192.168.1.20:3000`. Pairing links and QR codes offer it instead of the address OhPiChamber detects itself. Set it when that guess is wrong, for example in Docker, where OhPiChamber only sees the container's internal address.
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,25 +42,25 @@ How long a sign-in lasts, in days, on a device you chose to trust. The default i
 
 ### `OPENCODE_JWT_SECRET`
 
-Overrides the secret used to sign Host UI session tokens. This setting configures Host session signing rather than the agent runtime. Keep this secret private. When set, global sign-out is unavailable because OpenChamber cannot rotate the signing secret.
+Overrides the secret used to sign Host UI session tokens. This setting configures Host session signing rather than the agent runtime. Keep this secret private. When set, global sign-out is unavailable because OhPiChamber cannot rotate the signing secret.
 
 ### `OPENCHAMBER_API_ONLY`
 
-Starts OpenChamber in headless mode when set to `true` or `1`. API routes stay available for desktop and mobile clients, but the browser UI is not served.
+Starts OhPiChamber in headless mode when set to `true` or `1`. API routes stay available for desktop and mobile clients, but the browser UI is not served.
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-Origins allowed to show OpenChamber inside a frame on their own page, separated by spaces, for example `https://dash.example.com`. `*` allows any site. By default only OpenChamber itself and its desktop and mobile apps may frame it, which keeps other sites from overlaying its buttons.
+Origins allowed to show OhPiChamber inside a frame on their own page, separated by spaces, for example `https://dash.example.com`. `*` allows any site. By default only OhPiChamber itself and its desktop and mobile apps may frame it, which keeps other sites from overlaying its buttons.
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Overrides the OpenChamber data directory. The default is `~/.config/ohpichamber`.
+Overrides the OhPiChamber data directory. The default is `~/.config/ohpichamber`.
 
-Everything OpenChamber stores lives under this directory: settings, auth, project configs, themes, plans, and speech models. An instance that used a custom directory before version 1.23 gets its `projects`, `themes`, and `speech-models` folders copied from `~/.config/ohpichamber` on the first start; the originals stay in place and nothing is merged.
+Everything OhPiChamber stores lives under this directory: settings, auth, project configs, themes, plans, and speech models. An instance that used a custom directory before version 1.23 gets its `projects`, `themes`, and `speech-models` folders copied from `~/.config/ohpichamber` on the first start; the originals stay in place and nothing is merged.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Moves the managed chat directories that OpenChamber creates for chats without a project. The default is `~/.config/ohpichamber/chats`. Existing chats are not moved.
+Moves the managed chat directories that OhPiChamber creates for chats without a project. The default is `~/.config/ohpichamber/chats`. Existing chats are not moved.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -78,21 +78,21 @@ Enables verbose HTTP request logs when set to `true` or `1`.
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-Sends OpenChamber's own outgoing requests, such as usage limits and skill catalogs, through a proxy. Lowercase names work too. Hosts in `NO_PROXY` connect directly, and `localhost`, `127.0.0.1` and `::1` always do, so sign-in callbacks and local connections keep working.
+Sends OhPiChamber's own outgoing requests, such as usage limits and skill catalogs, through a proxy. Lowercase names work too. Hosts in `NO_PROXY` connect directly, and `localhost`, `127.0.0.1` and `::1` always do, so sign-in callbacks and local connections keep working.
 
 ## Terminal and Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-Shell executable used for OpenChamber terminal sessions.
+Shell executable used for OhPiChamber terminal sessions.
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-Git executable used by OpenChamber Git features.
+Git executable used by OhPiChamber Git features.
 
 ### `GIT_BINARY`
 
-Alternative Git executable override. Prefer `OPENCHAMBER_GIT_BINARY` for OpenChamber-specific configuration.
+Alternative Git executable override. Prefer `OPENCHAMBER_GIT_BINARY` for OhPiChamber-specific configuration.
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -102,7 +102,7 @@ Time-to-live, in milliseconds, for cached Git-backed file reads. Set `0` to disa
 
 ### `OPENAI_API_KEY`
 
-API key OpenChamber voice features use when they call OpenAI itself. It is never sent to a custom OpenAI-compatible server: give that server its own key in Settings.
+API key OhPiChamber voice features use when they call OpenAI itself. It is never sent to a custom OpenAI-compatible server: give that server its own key in Settings.
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -110,14 +110,14 @@ Allows remote OpenAI-compatible base URLs for voice features when set to `true` 
 
 ### `NGROK_AUTHTOKEN`
 
-ngrok auth token used by OpenChamber tunnel commands. You can also configure ngrok with `ngrok config add-authtoken <token>`.
+ngrok auth token used by OhPiChamber tunnel commands. You can also configure ngrok with `ngrok config add-authtoken <token>`.
 
 ## Runtime helpers
 
 ### `BUN_BINARY`
 
-Bun executable OpenChamber should use when spawning daemon processes.
+Bun executable OhPiChamber should use when spawning daemon processes.
 
 ### `BUN_INSTALL`
 
-Bun installation root. OpenChamber uses it to find `bin/bun` for daemon startup and updates.
+Bun installation root. OhPiChamber uses it to find `bin/bun` for daemon startup and updates.

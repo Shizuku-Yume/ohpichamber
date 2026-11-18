@@ -25,7 +25,7 @@ export const createPluginNotificationEmitter = (dependencies) => {
     if (retryAfter > 0) return { status: 429, retryAfter, body: { error: 'too many notifications' } };
     const settings = await readSettingsFromDiskMigrated();
     if (settings.nativeNotificationsEnabled === false) return { status: 200, body: { delivered: false, reason: 'notifications-disabled' } };
-    const payload = { title: parsed.data.title ?? 'OpenChamber', body: parsed.data.body, tag: parsed.data.tag, kind: 'plugin', sessionId: parsed.data.sessionId, directory: parsed.data.directory, requireHidden: true, showWhenFocused: parsed.data.showWhenFocused === true || settings.notificationMode === 'always' };
+    const payload = { title: parsed.data.title ?? 'OhPiChamber', body: parsed.data.body, tag: parsed.data.tag, kind: 'plugin', sessionId: parsed.data.sessionId, directory: parsed.data.directory, requireHidden: true, showWhenFocused: parsed.data.showWhenFocused === true || settings.notificationMode === 'always' };
     const desktopNotificationDelivered = emitDesktopNotification(payload) === true;
     broadcastUiNotification(payload, { desktopNotificationDelivered });
     return { status: 200, body: { delivered: true } };

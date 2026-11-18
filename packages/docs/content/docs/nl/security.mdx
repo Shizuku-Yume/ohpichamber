@@ -5,23 +5,23 @@ description: Bescherm de interface met een wachtwoord en passkeys voordat u haar
 
 # Beveiliging
 
-OpenChamber geeft toegang tot uw computer en code. Beveilig het daarom voordat anderen het kunnen bereiken. Deze pagina behandelt het interfacewachtwoord, passkeys en aandachtspunten voor netwerktoegang.
+OhPiChamber geeft toegang tot uw computer en code. Beveilig het daarom voordat anderen het kunnen bereiken. Deze pagina behandelt het interfacewachtwoord, passkeys en aandachtspunten voor netwerktoegang.
 
 ## Een interfacewachtwoord instellen
 
-Start OpenChamber met een wachtwoord om de browserinterface daarom te laten vragen:
+Start OhPiChamber met een wachtwoord om de browserinterface daarom te laten vragen:
 
 ```bash
-openchamber --ui-password be-creative-here
+ohpichamber --ui-password be-creative-here
 ```
 
-U kunt het ook instellen via de omgevingsvariabele `OPENCHAMBER_UI_PASSWORD` in plaats van op de opdrachtregel. Na het aanmelden onthoudt OpenChamber het apparaat een tijd, zodat u niet telkens opnieuw hoeft in te loggen.
+U kunt het ook instellen via de omgevingsvariabele `OPENCHAMBER_UI_PASSWORD` in plaats van op de opdrachtregel. Na het aanmelden onthoudt OhPiChamber het apparaat een tijd, zodat u niet telkens opnieuw hoeft in te loggen.
 
 Stel altijd een wachtwoord in als anderen de instantie kunnen bereiken, zeker via een [tunnel](/nl/tunnels/) of het openbare internet.
 
 ## Passkeys
 
-Zodra een wachtwoord is ingesteld, kunt u passkeys toevoegen voor sneller aanmelden, bijvoorbeeld via Face ID, Touch ID of een beveiligingssleutel. Doe dit bij **Instellingen → OpenChamber → Passkeys**.
+Zodra een wachtwoord is ingesteld, kunt u passkeys toevoegen voor sneller aanmelden, bijvoorbeeld via Face ID, Touch ID of een beveiligingssleutel. Doe dit bij **Instellingen → OhPiChamber → Passkeys**.
 
 Passkeys zijn aan het huidige wachtwoord gekoppeld. Als u het wachtwoord wijzigt of verwijdert, worden opgeslagen passkeys gewist en moet u ze opnieuw toevoegen.
 
@@ -31,10 +31,10 @@ Apparaten die via [Een apparaat verbinden](/nl/connect-devices/) zijn gekoppeld,
 
 ## Voordat u netwerktoegang geeft
 
-- Standaard luistert OpenChamber alleen op uw eigen computer, op `127.0.0.1`. Breder luisteren vereist een bewuste wijziging. Stel eerst een wachtwoord in.
+- Standaard luistert OhPiChamber alleen op uw eigen computer, op `127.0.0.1`. Breder luisteren vereist een bewuste wijziging. Stel eerst een wachtwoord in.
 - Gebruik voor eigen apparaten bij voorkeur [koppeling](/nl/connect-devices/) met de [Privérelay](/nl/private-relay/). Daarmee wordt niets openbaar bereikbaar.
 - Hebt u een openbare URL nodig, kies dan liever een [tunnel](/nl/tunnels/) of een privénetwerk zoals een VPN dan een rechtstreeks geopende internetpoort.
-- Gebruikt u een eigen HTTPS-server vóór OpenChamber, zie [Reverse proxy](/nl/reverse-proxy/).
+- Gebruikt u een eigen HTTPS-server vóór OhPiChamber, zie [Reverse proxy](/nl/reverse-proxy/).
 
 ## Enterprise-modus
 
@@ -50,7 +50,7 @@ Gebruik dit op laptops die u beheert. Plaats een bestand met de naam `policy.jso
 | Windows | `C:\ProgramData\OpenChamber\policy.json` |
 | Linux | `/etc/openchamber/policy.json` |
 
-Het pad is onafhankelijk van de installatie van OpenChamber. De desktopapp, de via npm gestarte webserver en de CLI lezen hetzelfde bestand. U kunt het verspreiden met uw apparaatbeheer, zoals Jamf of Intune. Koppel het bestand voor een Docker-server op het Linux-pad.
+Het pad is onafhankelijk van de installatie van OhPiChamber. De desktopapp, de via npm gestarte webserver en de CLI lezen hetzelfde bestand. U kunt het verspreiden met uw apparaatbeheer, zoals Jamf of Intune. Koppel het bestand voor een Docker-server op het Linux-pad.
 
 ```json
 {
@@ -67,13 +67,13 @@ Het pad is onafhankelijk van de installatie van OpenChamber. De desktopapp, de v
 }
 ```
 
-Alleen `enterpriseMode` is verplicht. `organization` verschijnt in Instellingen als 'Beheerd door Acme', zodat duidelijk is wie dit heeft ingesteld. `relayUrl` en `jev` leggen uw eigen relay en Jev-adres vast, met `allowNetworkAccess` kunnen andere apparaten OpenChamber via het netwerk bereiken, en `allowedExtensions` somt de extensierepository's op die u vertrouwt. Ze worden allemaal hieronder beschreven.
+Alleen `enterpriseMode` is verplicht. `organization` verschijnt in Instellingen als 'Beheerd door Acme', zodat duidelijk is wie dit heeft ingesteld. `relayUrl` en `jev` leggen uw eigen relay en Jev-adres vast, met `allowNetworkAccess` kunnen andere apparaten OhPiChamber via het netwerk bereiken, en `allowedExtensions` somt de extensierepository's op die u vertrouwt. Ze worden allemaal hieronder beschreven.
 
 - Gebruikers kunnen wat het bestand inschakelt niet uitschakelen via Instellingen of omgevingsvariabelen.
 - Als het bestand de enterprise-modus inschakelt, beslist alleen het bestand. De omgevingsvariabelen hieronder voor de relay, Jev en netwerktoegang worden genegeerd, omdat een gebruiker die zelf kan instellen.
 - Als het bestand bestaat maar onleesbaar is of geen geldige JSON bevat, blijft de enterprise-modus aan zonder vastgelegde adressen. Instellingen meldt dat het beleid niet kon worden gelezen. Een ongeldig bestand heft de bescherming nooit stilzwijgend op.
 - Wijzigingen gelden zonder herstart.
-- OpenChamber draait onder de gebruiker, dus die kan het bestand lezen. Houd daar rekening mee voordat u er een API-sleutel in zet.
+- OhPiChamber draait onder de gebruiker, dus die kan het bestand lezen. Houd daar rekening mee voordat u er een API-sleutel in zet.
 
 ### Een omgevingsvariabele
 
@@ -89,7 +89,7 @@ Met de variabele komen de relay, Jev, netwerktoegang en toegestane extensies ook
 
 ### Ingebouwde skillcatalogi verbergen
 
-OpenChamber wordt geleverd met een paar openbare skillcatalogi (Anthropic, OpenAI, Cursor, Matt Pocock). Heeft uw organisatie een eigen catalogus, voeg die dan toe als aangepaste catalogus en verberg de ingebouwde in het beleidsbestand. Dit werkt met of zonder enterprisemodus.
+OhPiChamber wordt geleverd met een paar openbare skillcatalogi (Anthropic, OpenAI, Cursor, Matt Pocock). Heeft uw organisatie een eigen catalogus, voeg die dan toe als aangepaste catalogus en verberg de ingebouwde in het beleidsbestand. Dit werkt met of zonder enterprisemodus.
 
 ```json
 {
@@ -97,7 +97,7 @@ OpenChamber wordt geleverd met een paar openbare skillcatalogi (Anthropic, OpenA
 }
 ```
 
-Instellingen biedt dan alleen catalogi aan die mensen zelf toevoegen, en OpenChamber laadt geen ingebouwde, ook niet op direct verzoek. Hier is geen omgevingsvariabele voor, omdat een gebruiker die zelf kan instellen.
+Instellingen biedt dan alleen catalogi aan die mensen zelf toevoegen, en OhPiChamber laadt geen ingebouwde, ook niet op direct verzoek. Hier is geen omgevingsvariabele voor, omdat een gebruiker die zelf kan instellen.
 
 ### Voorbeelden
 
@@ -157,10 +157,10 @@ Open Instellingen → Providers om te controleren of het werkt: bovenaan verschi
 - Updatecontroles blijven werken, zodat beveiligingsupdates u bereiken, maar versturen nooit gebruiksgegevens, zelfs geen anonieme installatie-ID.
 - [Externe tunnels](/nl/tunnels/) via Cloudflare, ngrok of Tailscale staan uit. Cloudflare en ngrok ontsleutelen het verkeer aan de rand van hun netwerk en kunnen elk verzoek lezen; Tailscale Serve en Funnel stellen deze computer open voor andere apparaten.
 - `.drawio`-diagrammen openen als XML-tekst. De diagrameditor is een pagina van diagrams.net, en een diagram daarin openen geeft het bestand aan die pagina.
-- De integratiecatalogus in de zijbalk is verborgen. Die installeert externe diensten uit een lijst die met OpenChamber wordt meegeleverd. MCP-servers, plug-ins en skills toevoegen in Instellingen werkt zoals voorheen.
+- De integratiecatalogus in de zijbalk is verborgen. Die installeert externe diensten uit een lijst die met OhPiChamber wordt meegeleverd. MCP-servers, plug-ins en skills toevoegen in Instellingen werkt zoals voorheen.
 - Lettertypen voor interface en code die van een openbaar CDN laden, vallen terug op de systeemlettertypen. Uw keuze blijft bewaard voor als de modus uit staat.
-- De [Privérelay](/nl/private-relay/) werkt alleen via uw eigen relay. Draai een [zelfgehoste relay](https://github.com/openchamber/openchamber-relay) en stel die in met `relayUrl` in het beleidsbestand of `OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws`. De gedeelde relay kan uw verkeer ook niet lezen dankzij end-to-endversleuteling, maar een eigen relay houdt de verbindingsmetadata en de toegang tot deze computer binnen uw netwerk. Zonder eigen relay kunt u helemaal geen apparaten koppelen.
-- OpenChamber luistert alleen op de computer waarop het draait. De desktopinstelling waarmee andere apparaten op het lokale netwerk de app kunnen openen staat uit, en de server weigert te starten op een netwerkadres, via de CLI (`--host`, `--lan`) of via de omgeving. Verschijnt het beleidsbestand terwijl de app draait, dan worden verbindingen van andere computers verbroken tot de volgende start. Sta netwerktoegang toe met `"allowNetworkAccess": true` in het beleidsbestand, of met `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1` als de omgeving de enterprise-modus inschakelt. Houd er rekening mee dat de verbinding onversleuteld HTTP is, dus op een gedeeld netwerk kan iedereen meelezen. Zet een server die anderen bereiken achter [uw eigen HTTPS](/nl/reverse-proxy/).
+- De [Privérelay](/nl/private-relay/) werkt alleen via een zelfgehoste relay die u instelt met `relayUrl` in het beleidsbestand of `OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws`. OhPiChamber heeft geen ingebouwde gedeelde relay (en remote iOS-push vereist `OPENCHAMBER_PUSH_RELAY_URL` of directe APNs-configuratie), zodat uw eigen relay de verbindingsmetadata en de toegang tot deze computer binnen uw netwerk houdt. Zonder geconfigureerde relay-URL kunt u geen apparaten via de relay koppelen.
+- OhPiChamber luistert alleen op de computer waarop het draait. De desktopinstelling waarmee andere apparaten op het lokale netwerk de app kunnen openen staat uit, en de server weigert te starten op een netwerkadres, via de CLI (`--host`, `--lan`) of via de omgeving. Verschijnt het beleidsbestand terwijl de app draait, dan worden verbindingen van andere computers verbroken tot de volgende start. Sta netwerktoegang toe met `"allowNetworkAccess": true` in het beleidsbestand, of met `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1` als de omgeving de enterprise-modus inschakelt. Houd er rekening mee dat de verbinding onversleuteld HTTP is, dus op een gedeeld netwerk kan iedereen meelezen. Zet een server die anderen bereiken achter [uw eigen HTTPS](/nl/reverse-proxy/).
 - [Extensies](/nl/extensions/) die gegevens buiten de computer kunnen sturen (omdat ze met een externe API praten, van externe adressen laden, een achtergronddienst draaien, wat de agent in sessies zegt naar die dienst laten sturen, sessies uit de Host lezen of sessies starten, toestemmingsverzoeken van de agent beantwoorden, instructies toevoegen), worden alleen geïnstalleerd vanuit een Git-repository die in `allowedExtensions` staat. Een toegestane extensie die meldingen bezorgt, krijgt alleen de algemene titel, zonder berichttekst, sessienaam of project, net als de telefoon. Een toegestane extensie die als tracker werkt, krijgt uw zoekopdrachten en de identificaties van de items die u opent, en de sessiereacties die ze plaatst dragen een vast label en een link naar de sessie, nooit wat er in de sessie is gezegd. Een toegestane extensie die het verbruik rapporteert, krijgt de aanmeldgegevens die de Host bewaart voor de providers die haar manifest noemt en waarmee u in haar dialoog instemde, en niets uit uw sessies. Extensies die niets hiervan doen, installeert u zoals altijd. Een geïnstalleerde extensie van een andere bron blijft uit, en Instellingen vermeldt waarom. De lijst bevat repository-URL's, omdat een extensie zelf haar naam kiest; een vermelding die eindigt op `/`, zoals `https://github.com/acme/`, staat elke repository daaronder toe. Op de computers van mensen die extensies bouwen, staat `"allowLocalExtensions": true` ook installeren vanuit een lokale map toe. Een ZIP blijft hoe dan ook geblokkeerd.
 - Omgevingsvariabelen uit **Instellingen → Algemeen** en uit `opencode service set env` bereiken de agent-runtime niet, omdat er een providersleutel tussen kan zitten. Git, de terminal en projectacties krijgen ze nog wel.
 
@@ -171,4 +171,4 @@ Taken voor kleine modellen, zoals sessietitels, samenvattingen, commitberichten 
 - [Een apparaat verbinden](/nl/connect-devices/) voor eenmalige koppelingen en tokens per apparaat
 - [Privérelay](/nl/private-relay/) voor end-to-endversleutelde toegang overal
 - [Tunnels](/nl/tunnels/) als u een openbare URL nodig hebt
-- [Reverse proxy](/nl/reverse-proxy/) om OpenChamber achter uw eigen server te draaien
+- [Reverse proxy](/nl/reverse-proxy/) om OhPiChamber achter uw eigen server te draaien

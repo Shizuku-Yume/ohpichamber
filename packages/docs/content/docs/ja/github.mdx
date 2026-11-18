@@ -1,13 +1,13 @@
 ---
 title: "Git ホスト: Issue とプルリクエスト"
-description: GitHub、GitLab、Gitea、Forgejo、Gerrit を接続し、OpenChamber から Issue とプルリクエストを扱います。
+description: GitHub、GitLab、Gitea、Forgejo、Gerrit を接続し、OhPiChamber から Issue とプルリクエストを扱います。
 ---
 
 # Git ホスト: Issue とプルリクエスト
 
-プロジェクトがあるホストのアカウントを接続すると、OpenChamber はその Issue とプルリクエストを一覧し、そこからセッションを開始し、プルリクエストの作成、レビュー、マージを代わりに行えます。組み込みのホストは 5 つです。GitHub（GitHub Enterprise を含む）、GitLab（セルフマネージドの GitLab を含む）、Gitea、Forgejo（Codeberg を含む）、Gerrit です。[拡張機能](/ja/extensions/#git-ホストとしての拡張機能) で別のホストを追加することもできます。
+プロジェクトがあるホストのアカウントを接続すると、OhPiChamber はその Issue とプルリクエストを一覧し、そこからセッションを開始し、プルリクエストの作成、レビュー、マージを代わりに行えます。組み込みのホストは 5 つです。GitHub（GitHub Enterprise を含む）、GitLab（セルフマネージドの GitLab を含む）、Gitea、Forgejo（Codeberg を含む）、Gerrit です。[拡張機能](/ja/extensions/#git-ホストとしての拡張機能) で別のホストを追加することもできます。
 
-OpenChamber がどのホストと通信するかは、プロジェクトのリモートで決まります。`origin` が gitlab.com にあるプロジェクトでは、ボード、ブランチのプルリクエストバッジ、Git パネルに GitLab アカウントが使われます。`github.com-work` のような `~/.ssh/config` のホストエイリアスにあるリモートは、どのホストにも対応付けられません。Gitea と Forgejo は、SSH 設定がインスタンスのウェブアドレスを指すエイリアスに対応付けます。インスタンスの SSH クローンアドレスを **Settings → Integrations** に入力すると、そのアドレスにあるリモートも対応付けます。
+OhPiChamber がどのホストと通信するかは、プロジェクトのリモートで決まります。`origin` が gitlab.com にあるプロジェクトでは、ボード、ブランチのプルリクエストバッジ、Git パネルに GitLab アカウントが使われます。`github.com-work` のような `~/.ssh/config` のホストエイリアスにあるリモートは、どのホストにも対応付けられません。Gitea と Forgejo は、SSH 設定がインスタンスのウェブアドレスを指すエイリアスに対応付けます。インスタンスの SSH クローンアドレスを **Settings → Integrations** に入力すると、そのアドレスにあるリモートも対応付けます。
 
 用語はホストに合わせて変わります。GitLab ではマージリクエスト、Gerrit では変更と呼びます。
 
@@ -21,7 +21,7 @@ OpenChamber がどのホストと通信するかは、プロジェクトのリ�
    - **Forgejo**: Codeberg では Personal Access Token を貼り付けます。別のサーバーでは、先にそのアドレスを追加します。
    - **Gerrit**: サーバーのアドレスを追加し、Gerrit のユーザー名と HTTP パスワードを入力します。
 
-接続されると、カードにアカウントが表示されます。1 つのホストに複数のアカウントを接続して切り替えたり、いつでも切断したりできます。同じマシンで `gh` CLI にサインイン済みなら、OpenChamber は GitHub にもそれを使えます。各トークンに必要なスコープと、各ホストに必要なバージョンは [統合機能](/ja/integrations/#gitlabgiteaforgejogerrit) にあります。
+接続されると、カードにアカウントが表示されます。1 つのホストに複数のアカウントを接続して切り替えたり、いつでも切断したりできます。同じマシンで `gh` CLI にサインイン済みなら、OhPiChamber は GitHub にもそれを使えます。各トークンに必要なスコープと、各ホストに必要なバージョンは [統合機能](/ja/integrations/#gitlabgiteaforgejogerrit) にあります。
 
 接続したアカウントはプロジェクトの [Git ID](/ja/git-identities/) にもできます。その場合、コミットにはそのアカウントの名前が入り、HTTPS での push にはそのトークンが使われます。
 
@@ -29,7 +29,7 @@ OpenChamber がどのホストと通信するかは、プロジェクトのリ�
 
 [worktree セッション](/ja/worktrees/) を作成するとき、プロジェクトのホストにある Issue またはプルリクエストから開始できます。
 
-- **issue** を選ぶと、OpenChamber はその Issue に基づいてブランチ名を付けます
+- **issue** を選ぶと、OhPiChamber はその Issue に基づいてブランチ名を付けます
 - **pull request** を選ぶと、そのプルリクエストのブランチをチェックアウトします。差分を含めて、エージェントに変更全体を渡すこともできます
 - **Gerrit の変更** を選ぶと、最新のパッチセットを `change-<number>` という名前のブランチにチェックアウトします
 
@@ -39,7 +39,7 @@ OpenChamber がどのホストと通信するかは、プロジェクトのリ�
 
 ## プルリクエストを開いて管理する
 
-[Git パネル](/ja/git/) の **PR** タブから、プルリクエストの作成、更新、draft から ready への変更、マージができます。OpenChamber は変更内容からタイトルと説明を書けます。
+[Git パネル](/ja/git/) の **PR** タブから、プルリクエストの作成、更新、draft から ready への変更、マージができます。OhPiChamber は変更内容からタイトルと説明を書けます。
 
 - **GitLab**: 同じタブでマージリクエストを開きます。マージでは merge と squash を選べます。
 - **Gitea** と **Forgejo**: GitHub と同じです。

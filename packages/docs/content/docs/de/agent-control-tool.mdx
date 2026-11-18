@@ -1,6 +1,6 @@
 ---
 title: Agenten-Steuerungswerkzeug
-description: Lass einen Agenten OpenChamber-Sitzungen, Worktrees und geplante Aufgaben direkt aus dem Chat verwalten.
+description: Lass einen Agenten OhPiChamber-Sitzungen, Worktrees und geplante Aufgaben direkt aus dem Chat verwalten.
 ---
 
 # Agenten-Steuerungswerkzeug
@@ -11,25 +11,25 @@ Verwende das Agentenwerkzeug `openchamber`, um Arbeit in der App direkt aus dem 
 
 Sprich einfach in natürlicher Sprache mit dem Agenten. Zum Beispiel:
 
-- "Erstelle in diesem Projekt eine neue OpenChamber-Sitzung, verwende das Modell `openai/gpt-5.6-sol` und sende ihr diesen Prompt: überprüfe den Authentifizierungsablauf."
-- "Erstelle für diese Aufgabe eine neue OpenChamber-Sitzung in einem separaten Worktree und bitte sie, Tests für den Login-Ablauf hinzuzufügen."
-- "Liste mit OpenChamber meine 10 neuesten Sitzungen mit ihrem aktuellen Status auf."
-- "Erstelle eine geplante OpenChamber-Aufgabe namens Werktags-Review, die werktags um 09:00 diesen Prompt sendet: prüfe die Änderungen seit dem letzten Lauf."
-- "Führe die geplante OpenChamber-Aufgabe Werktags-Review jetzt aus."
-- "Prüfe die OpenChamber-Sitzung namens Authentifizierungs-Review und zeig mir die neueste Antwort des Assistenten."
+- "Erstelle in diesem Projekt eine neue OhPiChamber-Sitzung, verwende das Modell `openai/gpt-5.6-sol` und sende ihr diesen Prompt: überprüfe den Authentifizierungsablauf."
+- "Erstelle für diese Aufgabe eine neue OhPiChamber-Sitzung in einem separaten Worktree und bitte sie, Tests für den Login-Ablauf hinzuzufügen."
+- "Liste mit OhPiChamber meine 10 neuesten Sitzungen mit ihrem aktuellen Status auf."
+- "Erstelle eine geplante OhPiChamber-Aufgabe namens Werktags-Review, die werktags um 09:00 diesen Prompt sendet: prüfe die Änderungen seit dem letzten Lauf."
+- "Führe die geplante OhPiChamber-Aufgabe Werktags-Review jetzt aus."
+- "Prüfe die OhPiChamber-Sitzung namens Authentifizierungs-Review und zeig mir die neueste Antwort des Assistenten."
 
-Das Steuerungswerkzeug listet Projekte und Modelleinstellungen auf, durchsucht den Modellkatalog, erstellt Sitzungen und führt sie weiter, forkt eine Sitzung und erstellt isolierte Worktree-Sitzungen. Das Planungswerkzeug erstellt, ändert, startet, pausiert und löscht geplante Aufgaben. So gestartete Sitzungen erscheinen in OpenChamber wie jede andere Sitzung, sodass du sie öffnen und die Arbeit selbst fortsetzen kannst.
+Das Steuerungswerkzeug listet Projekte und Modelleinstellungen auf, durchsucht den Modellkatalog, erstellt Sitzungen und führt sie weiter, forkt eine Sitzung und erstellt isolierte Worktree-Sitzungen. Das Planungswerkzeug erstellt, ändert, startet, pausiert und löscht geplante Aufgaben. So gestartete Sitzungen erscheinen in OhPiChamber wie jede andere Sitzung, sodass du sie öffnen und die Arbeit selbst fortsetzen kannst.
 
 ## Beachten
 
-- Prompts an neue Sitzungen kehren standardmäßig sofort zurück. Verfolge die Sitzung in OpenChamber oder bitte den Agenten, sie später zu prüfen.
+- Prompts an neue Sitzungen kehren standardmäßig sofort zurück. Verfolge die Sitzung in OhPiChamber oder bitte den Agenten, sie später zu prüfen.
 - Ein separater Worktree entsteht nur, wenn du danach fragst. Nicht committete Änderungen aus deinem aktuellen Worktree werden nicht dorthin kopiert.
 - Wenn der Checkout beschäftigt wirkt, etwa weil eine andere Sitzung auf demselben Branch arbeitet, kann der Agent anbieten, seine eigene Sitzung in einen neuen Worktree zu verschieben. Er verschiebt sie erst nach deiner Zustimmung und nimmt nur die Dateien mit, die er selbst geändert hat.
 - Die Werkzeuge können keine Sitzungen oder Worktrees löschen, keine Projektpfade registrieren, keine beliebigen Shell-Befehle ausführen und keine beliebigen URLs aufrufen.
 
 ## Werkzeuge ein- oder ausschalten
 
-Öffne **Einstellungen → Allgemein → OpenChamber-Werkzeuge** und ändere **Agent control tool**. Die Einstellung gilt sofort ohne Neustart. Das Werkzeug arbeitet über die native Host-Aktionsgrenze von OpenChamber, um Sitzungen, Worktrees und geplante Aufgaben zu verwalten.
+Öffne **Einstellungen → Allgemein → OhPiChamber-Werkzeuge** und ändere **Agent control tool**. Die Einstellung gilt sofort ohne Neustart. Das Werkzeug arbeitet über die native Host-Aktionsgrenze von OhPiChamber, um Sitzungen, Worktrees und geplante Aufgaben zu verwalten.
 
 ## Verwandt
 
@@ -37,5 +37,5 @@ Das Steuerungswerkzeug listet Projekte und Modelleinstellungen auf, durchsucht d
 - [Worktree-Sitzungen](/de/worktrees/)
 - [Sitzungsziele](/de/session-goals/)
 - [Workflows](/de/workflows/): das Workflow-Werkzeug, um eine große Aufgabe auf viele Agenten zu verteilen
-- [Browser-Panel](/de/desktop-browser/): das OpenChamber-Web-Werkzeug, um eine Seite anzusehen und zu bedienen
+- [Browser-Panel](/de/desktop-browser/): das OhPiChamber-Web-Werkzeug, um eine Seite anzusehen und zu bedienen
 - [Projektnotizen, Todos & Pläne](/de/notes-todos-plans/): das Projektwissen-Werkzeug, für Notizen, Todos und Pläne im Tab Kontext

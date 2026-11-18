@@ -5,23 +5,23 @@ description: Protege la UI con una contraseña y passkeys antes de exponerla.
 
 # Seguridad
 
-OpenChamber da acceso a tu máquina y a tu código, así que bloquéalo antes de que nadie más que tú pueda alcanzarlo. Esta página cubre la contraseña de UI, las passkeys y lo que debes saber antes de exponer OpenChamber a una red.
+OhPiChamber da acceso a tu máquina y a tu código, así que bloquéalo antes de que nadie más que tú pueda alcanzarlo. Esta página cubre la contraseña de UI, las passkeys y lo que debes saber antes de exponer OhPiChamber a una red.
 
 ## Define una contraseña de UI
 
-Inicia OpenChamber con una contraseña y la UI del navegador la pedirá:
+Inicia OhPiChamber con una contraseña y la UI del navegador la pedirá:
 
 ```bash
-openchamber --ui-password be-creative-here
+ohpichamber --ui-password be-creative-here
 ```
 
-También puedes definirla con la variable de entorno `OPENCHAMBER_UI_PASSWORD` en lugar de ponerla en la línea de comandos. Tras iniciar sesión, OpenChamber recuerda el dispositivo durante un tiempo para no pedírtela cada vez.
+También puedes definirla con la variable de entorno `OPENCHAMBER_UI_PASSWORD` en lugar de ponerla en la línea de comandos. Tras iniciar sesión, OhPiChamber recuerda el dispositivo durante un tiempo para no pedírtela cada vez.
 
 Define siempre una contraseña si la instancia es accesible para alguien más, especialmente a través de un [túnel](/es/tunnels/) o de internet público.
 
 ## Passkeys
 
-Una vez definida una contraseña, puedes añadir passkeys (Face ID, Touch ID, una llave de seguridad) para un inicio de sesión más rápido. Añádelas en **Settings → OpenChamber → Passkeys**.
+Una vez definida una contraseña, puedes añadir passkeys (Face ID, Touch ID, una llave de seguridad) para un inicio de sesión más rápido. Añádelas en **Settings → OhPiChamber → Passkeys**.
 
 Las passkeys están vinculadas a la contraseña actual. Si cambias o eliminas la contraseña, las passkeys guardadas se borran y tendrás que añadirlas de nuevo.
 
@@ -31,10 +31,10 @@ Los dispositivos vinculados mediante [Conectar un dispositivo](/es/connect-devic
 
 ## Antes de exponerlo
 
-- De forma predeterminada, OpenChamber solo escucha en tu propia máquina (`127.0.0.1`). Hace falta un cambio deliberado para escuchar más ampliamente, y deberías definir una contraseña primero.
+- De forma predeterminada, OhPiChamber solo escucha en tu propia máquina (`127.0.0.1`). Hace falta un cambio deliberado para escuchar más ampliamente, y deberías definir una contraseña primero.
 - Para tus propios dispositivos, prefiere la [vinculación](/es/connect-devices/) con el [Private Relay](/es/private-relay/): no se expone nada públicamente.
 - Si necesitas una URL pública, prefiere un [túnel](/es/tunnels/) o una red privada (como una VPN) antes que abrir un puerto a internet.
-- Si pones OpenChamber detrás de tu propio servidor HTTPS, consulta [Proxy inverso](/es/reverse-proxy/).
+- Si pones OhPiChamber detrás de tu propio servidor HTTPS, consulta [Proxy inverso](/es/reverse-proxy/).
 
 ## Modo empresa
 
@@ -50,7 +50,7 @@ Es la opción para los portátiles que administras. Pon un archivo llamado `poli
 | Windows | `C:\ProgramData\OpenChamber\policy.json` |
 | Linux | `/etc/openchamber/policy.json` |
 
-La ruta no depende de cómo esté instalado OpenChamber. La app de escritorio, el servidor web iniciado desde npm y la CLI leen el mismo archivo. Puedes distribuirlo con tu gestor de dispositivos (Jamf, Intune y similares). Para un servidor en Docker, monta el archivo en la ruta de Linux.
+La ruta no depende de cómo esté instalado OhPiChamber. La app de escritorio, el servidor web iniciado desde npm y la CLI leen el mismo archivo. Puedes distribuirlo con tu gestor de dispositivos (Jamf, Intune y similares). Para un servidor en Docker, monta el archivo en la ruta de Linux.
 
 ```json
 {
@@ -67,13 +67,13 @@ La ruta no depende de cómo esté instalado OpenChamber. La app de escritorio, e
 }
 ```
 
-Solo hace falta `enterpriseMode`. `organization` aparece en Configuración como "Gestionado por Acme", para que la gente sepa quién tomó la decisión. `relayUrl` y `jev` fijan tu propio relay y tu propio endpoint de Jev, `allowNetworkAccess` permite que otros dispositivos lleguen a OpenChamber por la red, y `allowedExtensions` enumera los repositorios de extensiones en los que confías. Todos se describen más abajo.
+Solo hace falta `enterpriseMode`. `organization` aparece en Configuración como "Gestionado por Acme", para que la gente sepa quién tomó la decisión. `relayUrl` y `jev` fijan tu propio relay y tu propio endpoint de Jev, `allowNetworkAccess` permite que otros dispositivos lleguen a OhPiChamber por la red, y `allowedExtensions` enumera los repositorios de extensiones en los que confías. Todos se describen más abajo.
 
 - Nada que configure un usuario, ni en Configuración ni en el entorno, desactiva lo que el archivo activa.
 - Cuando el archivo activa el modo empresa, solo decide el archivo. Las variables de entorno de más abajo para el relay, Jev y el acceso de red se ignoran, porque un usuario puede definirlas por su cuenta.
 - Si el archivo existe pero no se puede leer o no es JSON válido, el modo empresa sigue activado y no se fija nada. Configuración indica que no se pudo leer la política. Un archivo roto nunca levanta la protección en silencio.
 - Los cambios se aplican sin reiniciar.
-- OpenChamber se ejecuta como el usuario, así que el usuario puede leer el archivo. Tenlo en cuenta antes de poner una clave de API en él.
+- OhPiChamber se ejecuta como el usuario, así que el usuario puede leer el archivo. Tenlo en cuenta antes de poner una clave de API en él.
 
 ### Una variable de entorno
 
@@ -89,7 +89,7 @@ Con la variable, el relay, Jev, el acceso de red y las extensiones permitidas ta
 
 ### Ocultar los catálogos de skills incluidos
 
-OpenChamber incluye algunos catálogos públicos de skills (Anthropic, OpenAI, Cursor, Matt Pocock). Si tu organización mantiene uno propio, añádelo como catálogo personalizado y oculta los incluidos en el archivo de políticas. Funciona con o sin el modo empresarial.
+OhPiChamber incluye algunos catálogos públicos de skills (Anthropic, OpenAI, Cursor, Matt Pocock). Si tu organización mantiene uno propio, añádelo como catálogo personalizado y oculta los incluidos en el archivo de políticas. Funciona con o sin el modo empresarial.
 
 ```json
 {
@@ -97,7 +97,7 @@ OpenChamber incluye algunos catálogos públicos de skills (Anthropic, OpenAI, C
 }
 ```
 
-Así Ajustes solo ofrece los catálogos que la gente añade por su cuenta, y OpenChamber no carga uno incluido aunque se le pida directamente. No hay variable de entorno para esto, porque un usuario puede definirlas.
+Así Ajustes solo ofrece los catálogos que la gente añade por su cuenta, y OhPiChamber no carga uno incluido aunque se le pida directamente. No hay variable de entorno para esto, porque un usuario puede definirlas.
 
 ### Ejemplos
 
@@ -157,10 +157,10 @@ Para comprobar que funcionó, abre Configuración → Proveedores: arriba aparec
 - Las comprobaciones de actualizaciones siguen funcionando, así que las correcciones de seguridad te siguen llegando, pero nunca informan del uso, ni siquiera del ID de instalación anónimo.
 - Los [túneles externos](/es/tunnels/) (Cloudflare, ngrok, Tailscale) están desactivados. Cloudflare y ngrok descifran el tráfico en su borde y ven cada solicitud en texto plano; Tailscale Serve y Funnel abren esta máquina a otros dispositivos.
 - Los diagramas `.drawio` se abren como su texto XML. El editor de diagramas es una página de diagrams.net, y abrir un diagrama allí le entrega el archivo.
-- El catálogo de integraciones de la barra lateral está oculto. Instala servicios externos de una lista que viene con OpenChamber. Añadir servidores MCP, plugins y skills en Ajustes funciona como antes.
+- El catálogo de integraciones de la barra lateral está oculto. Instala servicios externos de una lista que viene con OhPiChamber. Añadir servidores MCP, plugins y skills en Ajustes funciona como antes.
 - Las fuentes de interfaz y de código que se cargan desde una CDN pública pasan a las fuentes del sistema. Tu elección se guarda para cuando el modo esté desactivado.
-- El [Private Relay](/es/private-relay/) solo funciona a través de tu propio relay. Ejecuta un [relay autoalojado](https://github.com/openchamber/openchamber-relay) y apunta OpenChamber hacia él con `relayUrl` en el archivo de políticas o con `OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws`. El relay compartido tampoco puede leer tu tráfico, ya que está cifrado de extremo a extremo, pero el tuyo mantiene los metadatos de conexión y la entrada a esta máquina dentro de tu red. Sin tu propio relay, no se puede vincular ningún dispositivo.
-- OpenChamber escucha solo en la máquina donde se ejecuta. El ajuste de escritorio que permite a otros dispositivos de la red local abrir la app está desactivado, y el servidor se niega a arrancar en una dirección de red, ya sea desde la CLI (`--host`, `--lan`) o desde el entorno. Si el archivo de políticas aparece mientras la app está en marcha, las conexiones desde otras máquinas se cortan hasta el siguiente arranque. Permite el acceso de red con `"allowNetworkAccess": true` en el archivo de políticas, o con `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1` donde el entorno activa el modo empresa. Ten en cuenta que la conexión es HTTP sin cifrar, así que en una red compartida cualquiera puede leerla; pon un servidor al que accedan otros detrás de [tu propio HTTPS](/es/reverse-proxy/).
+- El [Private Relay](/es/private-relay/) solo funciona a través de un relay autoalojado que configures con `relayUrl` en el archivo de políticas o `OPENCHAMBER_RELAY_URL=wss://relay.example.com/ws`. OhPiChamber no incluye un relay compartido integrado (y el push remoto en iOS requiere `OPENCHAMBER_PUSH_RELAY_URL` o configuración directa de APNs), por lo que tu propio relay mantiene los metadatos de conexión y la entrada a esta máquina dentro de tu red. Sin una URL de relay configurada, no se pueden vincular dispositivos por el relay.
+- OhPiChamber escucha solo en la máquina donde se ejecuta. El ajuste de escritorio que permite a otros dispositivos de la red local abrir la app está desactivado, y el servidor se niega a arrancar en una dirección de red, ya sea desde la CLI (`--host`, `--lan`) o desde el entorno. Si el archivo de políticas aparece mientras la app está en marcha, las conexiones desde otras máquinas se cortan hasta el siguiente arranque. Permite el acceso de red con `"allowNetworkAccess": true` en el archivo de políticas, o con `OPENCHAMBER_ALLOW_NETWORK_ACCESS=1` donde el entorno activa el modo empresa. Ten en cuenta que la conexión es HTTP sin cifrar, así que en una red compartida cualquiera puede leerla; pon un servidor al que accedan otros detrás de [tu propio HTTPS](/es/reverse-proxy/).
 - Las [extensiones](/es/extensions/) que pueden enviar datos fuera de la máquina (las que hablan con una API externa, cargan desde direcciones externas, ejecutan un servicio en segundo plano, hacen que se envíe a ese servicio lo que dice el agente en las sesiones, leen sesiones del Host o inician sesiones, responden a las solicitudes de permiso del agente, añaden instrucciones, incluyen skills para los agentes) solo se instalan desde un repositorio Git que figure en `allowedExtensions`. Una extensión permitida que entrega notificaciones recibe solo el título genérico, sin texto del mensaje, nombre de sesión ni proyecto, igual que el teléfono. Una extensión permitida que actúa como gestor de incidencias recibe tus búsquedas y los identificadores de los elementos que abres, y los comentarios de sesión que publica llevan una etiqueta fija y un enlace a la sesión, nunca lo que se dijo en ella. Una extensión permitida que informa del uso recibe las credenciales que el Host guarda para los proveedores que enumera su manifiesto, que aprobaste en su diálogo, y nada de tus sesiones. Las extensiones que no hacen nada de esto se instalan como siempre. Una extensión instalada desde cualquier otro sitio queda desactivada, y Configuración explica por qué. La lista contiene URL de repositorios, porque cada extensión elige su propio nombre; una entrada que termina en `/`, como `https://github.com/acme/`, permite todos los repositorios que hay debajo. En las máquinas de quienes desarrollan extensiones, `"allowLocalExtensions": true` también permite instalar desde una carpeta local. Un ZIP sigue bloqueado en cualquier caso.
 - Las variables de entorno de **Configuración → General** y de `opencode service set env` no llegan al runtime del agente, porque una de ellas podría llevar una clave de proveedor. Git, la terminal y las acciones de proyecto las siguen recibiendo.
 
@@ -171,4 +171,4 @@ Las tareas del modelo pequeño (títulos de sesión, resúmenes, mensajes de com
 - [Conectar un dispositivo](/es/connect-devices/) — vinculación de un solo uso y tokens por dispositivo
 - [Private Relay](/es/private-relay/) — acceso cifrado de extremo a extremo desde cualquier lugar
 - [Túneles](/es/tunnels/) — expón una URL pública cuando la necesites
-- [Proxy inverso](/es/reverse-proxy/) — ejecuta OpenChamber detrás de tu propio servidor
+- [Proxy inverso](/es/reverse-proxy/) — ejecuta OhPiChamber detrás de tu propio servidor

@@ -81,7 +81,7 @@ export const OPENCHAMBER_KNOWLEDGE_ACTIONS = Object.freeze(
  * completely: an agent that can page the user is a choice the user makes.
  */
 const OPENCHAMBER_NOTIFY_ACTION_DEFINITIONS = Object.freeze([
-  { action: 'notify.send', title: 'Notify the user', description: 'Send the user a notification; requires title, body is optional. By default it appears only while the user is away from OpenChamber; set showWhenFocused only when it cannot wait' },
+  { action: 'notify.send', title: 'Notify the user', description: 'Send the user a notification; requires title, body is optional. By default it appears only while the user is away from OhPiChamber; set showWhenFocused only when it cannot wait' },
 ]);
 
 export const OPENCHAMBER_NOTIFY_ACTIONS = Object.freeze(
@@ -214,7 +214,7 @@ export const resolveAgentToolAction = (requested, toolName) => {
   }
 
   return {
-    error: `Unsupported OpenChamber action: ${value || 'missing'}. Use one of: ${known.join(', ')}`,
+    error: `Unsupported OhPiChamber action: ${value || 'missing'}. Use one of: ${known.join(', ')}`,
   };
 };
 

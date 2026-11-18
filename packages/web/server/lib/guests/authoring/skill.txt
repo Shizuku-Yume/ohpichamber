@@ -1,10 +1,10 @@
 ---
 name: openchamber-extensions
-description: Build, change or publish an OpenChamber extension.
+description: Build, change or publish an OhPiChamber extension.
 disable-model-invocation: true
 ---
 
-# Writing an OpenChamber extension
+# Writing an OhPiChamber extension
 
 An extension is a folder with a `package.json` that has an `openchamber` block. The app draws most of it from that block, and your code runs in two places: pages in sandboxed frames, and an optional Node service. After the user adds the folder once, every rebuild reloads live.
 

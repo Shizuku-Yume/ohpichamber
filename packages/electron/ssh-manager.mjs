@@ -377,7 +377,7 @@ const waitLocalForwardReady = async (localPort) => {
     await new Promise((resolve) => setTimeout(resolve, pollMs));
     pollMs = Math.min(pollMs * 2, 2000);
   }
-  throw new Error('Timed out waiting for forwarded OpenChamber health');
+  throw new Error('Timed out waiting for forwarded OhPiChamber health');
 };
 
 const parseVersionToken = (raw) => {
@@ -915,11 +915,11 @@ export class ElectronSshManager {
         password,
         trustDevice: true,
         issueClientToken: true,
-        clientLabel: 'OpenChamber Desktop SSH',
+        clientLabel: 'OhPiChamber Desktop SSH',
       }),
     });
     if (!loginResponse.ok) {
-      throw new Error(`Configured OpenChamber UI password was rejected by forwarded server (status ${loginResponse.status})`);
+      throw new Error(`Configured OhPiChamber UI password was rejected by forwarded server (status ${loginResponse.status})`);
     }
 
     const payload = await loginResponse.json().catch(() => null);
@@ -937,7 +937,7 @@ export class ElectronSshManager {
         'Content-Type': 'application/json',
         Cookie: cookie,
       },
-      body: JSON.stringify({ label: 'OpenChamber Desktop SSH' }),
+      body: JSON.stringify({ label: 'OhPiChamber Desktop SSH' }),
     });
     if (!tokenResponse.ok) return '';
     const tokenPayload = await tokenResponse.json().catch(() => null);
@@ -1129,7 +1129,7 @@ export class ElectronSshManager {
         lastError = error;
       }
     }
-    throw lastError || new Error('Failed to install OpenChamber on remote host');
+    throw lastError || new Error('Failed to install OhPiChamber on remote host');
   }
 
   async probeRemoteSystemInfo(parsed, controlPath, port, openchamberPassword) {
@@ -1162,15 +1162,15 @@ export class ElectronSshManager {
     if (isLivenessHttpStatus(infoStatus)) {
       if (isAuthHttpStatus(infoStatus)) {
         if (openchamberPassword && authStatus !== 200) {
-          throw new Error(`Remote OpenChamber requires UI authentication and configured password was rejected (auth status ${authStatus})`);
+          throw new Error(`Remote OhPiChamber requires UI authentication and configured password was rejected (auth status ${authStatus})`);
         }
         if (isLivenessHttpStatus(healthStatus)) return { info: {}, passwordAccepted, authStatus };
-        throw new Error('Remote OpenChamber requires UI authentication on /api/system/info; configure OpenChamber UI password');
+        throw new Error('Remote OhPiChamber requires UI authentication on /api/system/info; configure OhPiChamber UI password');
       }
     } else if (isLivenessHttpStatus(healthStatus)) {
       return { info: {}, passwordAccepted, authStatus };
     } else {
-      throw new Error(`Remote OpenChamber probe failed (info status ${infoStatus}, health status ${healthStatus})`);
+      throw new Error(`Remote OhPiChamber probe failed (info status ${infoStatus}, health status ${healthStatus})`);
     }
 
     try {
@@ -1358,46 +1358,46 @@ export class ElectronSshManager {
   async ensureRemoteServer(instance, parsed, controlPath) {
     if (instance.remoteOpenchamber.mode === 'external') {
       if (!instance.remoteOpenchamber.preferredPort) {
-        throw new Error('External mode requires a preferred remote OpenChamber port');
+        throw new Error('External mode requires a preferred remote OhPiChamber port');
       }
       const port = instance.remoteOpenchamber.preferredPort;
-      this.setStatus(instance.id, 'server_detecting', 'Probing external OpenChamber server', null, null, port, false, 0, false);
+      this.setStatus(instance.id, 'server_detecting', 'Probing external OhPiChamber server', null, null, port, false, 0, false);
       await this.probeRemoteSystemInfo(parsed, controlPath, port, this.configuredOpenChamberPassword(instance));
       return { remotePort: port, startedByUs: false, ownsRemoteServer: false, remoteBinPath: null };
     }
 
-    this.setStatus(instance.id, 'remote_probe', 'Checking remote OpenChamber installation');
+    this.setStatus(instance.id, 'remote_probe', 'Checking remote OhPiChamber installation');
     const installed = await this.remoteOpenChamberCandidates(parsed, controlPath);
     let binary = installed.find((candidate) => candidate.version === this.appVersion) || null;
 
     if (!binary) {
       const existing = installed[0] || null;
       if (existing) {
-        this.setStatus(instance.id, 'updating', `Updating remote OpenChamber from ${existing.version || 'unknown'} to ${this.appVersion}`);
+        this.setStatus(instance.id, 'updating', `Updating remote OhPiChamber from ${existing.version || 'unknown'} to ${this.appVersion}`);
       } else {
-        this.setStatus(instance.id, 'installing', 'Installing OpenChamber on remote host');
+        this.setStatus(instance.id, 'installing', 'Installing OhPiChamber on remote host');
       }
       await this.installOpenChamberManaged(parsed, controlPath, this.appVersion, instance.remoteOpenchamber.installMethod);
 
       const afterInstall = await this.remoteOpenChamberCandidates(parsed, controlPath);
       binary = afterInstall.find((candidate) => candidate.version === this.appVersion) || afterInstall[0] || existing;
       if (!binary) {
-        throw new Error('OpenChamber was installed on the remote host but no openchamber binary could be found');
+        throw new Error('OhPiChamber was installed on the remote host but no ohpichamber binary could be found');
       }
     }
 
-    this.setStatus(instance.id, 'server_detecting', 'Detecting managed OpenChamber server');
+    this.setStatus(instance.id, 'server_detecting', 'Detecting managed OhPiChamber server');
     const adopted = await this.adoptRunningRemoteServer(instance, parsed, controlPath, binary.binPath);
     let remotePort = adopted?.port || null;
     let startedByUs = false;
     if (!remotePort) {
-      this.setStatus(instance.id, 'server_starting', 'Starting managed OpenChamber server');
+      this.setStatus(instance.id, 'server_starting', 'Starting managed OhPiChamber server');
       const desiredPort = instance.remoteOpenchamber.preferredPort || randomPortCandidate(instance.id);
       remotePort = await this.startRemoteServerManaged(parsed, controlPath, instance, desiredPort, binary.binPath);
       startedByUs = true;
     }
     if (!(await this.remoteServerRunning(parsed, controlPath, remotePort, this.configuredOpenChamberPassword(instance)))) {
-      throw new Error('Managed OpenChamber server failed to become reachable');
+      throw new Error('Managed OhPiChamber server failed to become reachable');
     }
     // An adopted daemon is as much this instance's server as one it just
     // started: with keepRunning off, disconnecting stops either.

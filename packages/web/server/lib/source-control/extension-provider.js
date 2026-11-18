@@ -80,7 +80,7 @@ const callError = (message, { status, code, kind = 'provider-error', outbound = 
   return error;
 };
 
-const malformed = (label, detail, outbound = []) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
+const malformed = (label, detail, outbound = []) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
   status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', outbound,
 });
 

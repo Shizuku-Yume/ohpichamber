@@ -133,8 +133,8 @@ export const createRelayService = ({
   const standbyStatus = (holder) => ({
     state: 'standby',
     lastError: holder?.host
-      ? `relay host is owned by another OpenChamber process sharing this data dir (pid ${holder.pid} on ${holder.host})`
-      : 'relay host is owned by another OpenChamber process sharing this data dir',
+      ? `relay host is owned by another OhPiChamber process sharing this data dir (pid ${holder.pid} on ${holder.host})`
+      : 'relay host is owned by another OhPiChamber process sharing this data dir',
     connectedClients: 0,
   });
 

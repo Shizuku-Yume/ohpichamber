@@ -163,7 +163,7 @@ export function createGiteaClient({
      * Every page of a collection up to `maxItems`; past it the read fails
      * instead of passing a capped list off as complete.
      */
-    collection: async (path, query, { limit = 50, maxItems = 2000, message = `${label} list is longer than OpenChamber reads` } = {}) => {
+    collection: async (path, query, { limit = 50, maxItems = 2000, message = `${label} list is longer than OhPiChamber reads` } = {}) => {
       const items = [];
       for (let number = 1; ; number += 1) {
         const result = await page(path, query, { page: number, limit });

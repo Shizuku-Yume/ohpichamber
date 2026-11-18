@@ -1,8 +1,8 @@
-# OpenChamber Desktop
+# OhPiChamber Desktop
 
-Electron desktop runtime for OpenChamber on macOS, Windows, and Linux.
+Electron desktop runtime for OhPiChamber on macOS, Windows, and Linux.
 
-This package owns the native shell: windows, menus, deep links, native notifications, auto-updates, host switching, SSH connections, tunnel helpers, and packaged desktop builds. The web UI and OpenChamber server logic still live in `packages/web` and shared React UI lives in `packages/ui`.
+This package owns the native shell: windows, menus, deep links, native notifications, auto-updates, host switching, SSH connections, tunnel helpers, and packaged desktop builds. The web UI and OhPiChamber server logic still live in `packages/web` and shared React UI lives in `packages/ui`.
 
 ### Migration status
 
@@ -10,7 +10,7 @@ Electron is retained in OhPiChamber. It embeds the Node.js Host Gateway; the sha
 
 ## How It Runs
 
-Desktop starts the OpenChamber web server in the same Electron main process. There is no separate sidecar subprocess for the OpenChamber server.
+Desktop starts the OhPiChamber web server in the same Electron main process. There is no separate sidecar subprocess for the OhPiChamber server.
 
 `main.mjs` imports `ohpichamber/server/index.js` and calls `startWebUiServer()`. The Electron window then loads the UI from the local server in development, or from packaged `resources/web-dist` assets in packaged builds.
 
@@ -344,16 +344,16 @@ Packaged desktop builds target six native architectures:
 
 ### Why the macOS executable gets its own UUID
 
-macOS Local Network privacy identifies an app by its main executable's Mach-O `LC_UUID` (Apple TN3179). Electron ships one prebuilt executable per version and architecture, so every app on the same Electron release shares that UUID, and macOS applies the Local Network answer of whichever of those apps it met first. OpenChamber then never gets its own prompt: its terminals and the supervised Agent Service get `No route to host` for LAN addresses when the other app was denied or never asked, and the prompt, when one shows, names the other app. The `afterPack` hook (`scripts/macos-executable-uuid.cjs`) writes a UUID derived from the `appId` before electron-builder signs, so it stays the same across releases and the user's answer survives updates; the first update to such a build asks once. The hook then signs the executable ad hoc, so a build that skips signing still launches on arm64. Only the small launcher changes; `Electron Framework.framework` and the helper apps keep Electron's binaries. A thin executable is required, so a `--universal` build fails here.
+macOS Local Network privacy identifies an app by its main executable's Mach-O `LC_UUID` (Apple TN3179). Electron ships one prebuilt executable per version and architecture, so every app on the same Electron release shares that UUID, and macOS applies the Local Network answer of whichever of those apps it met first. OhPiChamber then never gets its own prompt: its terminals and the supervised Agent Service get `No route to host` for LAN addresses when the other app was denied or never asked, and the prompt, when one shows, names the other app. The `afterPack` hook (`scripts/macos-executable-uuid.cjs`) writes a UUID derived from the `appId` before electron-builder signs, so it stays the same across releases and the user's answer survives updates; the first update to such a build asks once. The hook then signs the executable ad hoc, so a build that skips signing still launches on arm64. Only the small launcher changes; `Electron Framework.framework` and the helper apps keep Electron's binaries. A thin executable is required, so a `--universal` build fails here.
 
-Making terminals and the Agent Service their own responsible process (a private `responsibility_spawnattrs_setdisclaim` launcher) also gets them LAN access, but it moves every other privacy prompt they raise, such as Documents or Desktop, away from OpenChamber. With the UUID fix they stay attributed to OpenChamber.
+Making terminals and the Agent Service their own responsible process (a private `responsibility_spawnattrs_setdisclaim` launcher) also gets them LAN access, but it moves every other privacy prompt they raise, such as Documents or Desktop, away from OhPiChamber. With the UUID fix they stay attributed to OhPiChamber.
 
 ### Windows signing through SignPath
 
 `.github/workflows/windows-signed-build.yml` builds and signs the Windows app; the signing policy, organization and project are the `env` block at its top. Two workflows call it: the desktop smoke workflow (`sign_windows` input) and `release-windows.yml`, run from a release tag. Releases still come unsigned from `release.yml` until the SignPath Foundation certificate is issued; then `release.yml` stops building Windows and publishing, and `release-windows.yml` adds the signed files to the draft and publishes it. `scripts/windows-signpath.mjs` drives the build in two passes, each followed by one signing request that holds both architectures, so a build needs two approvals in SignPath:
 
-1. `build-app` builds the app and stages `OpenChamber.exe` and the NSIS uninstaller. The request uses the `windows-app` artifact configuration.
-2. `build-installer` puts the signed `OpenChamber.exe` into the same unpacked app and builds the installer from it (`--prepackaged`), with the signed uninstaller in place. The request uses `windows-installer`.
+1. `build-app` builds the app and stages `OhPiChamber.exe` and the NSIS uninstaller. The request uses the `windows-app` artifact configuration.
+2. `build-installer` puts the signed `OhPiChamber.exe` into the same unpacked app and builds the installer from it (`--prepackaged`), with the signed uninstaller in place. The request uses `windows-installer`.
 3. `finalize` regenerates the blockmap and `latest.yml`, which electron-builder computed from the unsigned installer.
 
 Only those executables are ours. Electron's DLLs, `elevate.exe`, the bundled Agent Runtime, ripgrep and node-pty's binaries come from upstream projects, and SignPath Foundation's terms forbid signing them with our certificate; they ship unsigned inside the signed installer.
@@ -364,7 +364,7 @@ SignPath refuses a signing request from a run where any job ran on a runner othe
 
 #### Why the second pass reuses the unpacked app instead of building again
 
-`OpenChamber.exe` carries the hash of `app.asar` in its resources. A fresh pack writes a new `app.asar`, and the signed executable from the first pass would no longer match it.
+`OhPiChamber.exe` carries the hash of `app.asar` in its resources. A fresh pack writes a new `app.asar`, and the signed executable from the first pass would no longer match it.
 
 #### Why the uninstaller is swapped in a sign hook
 
@@ -376,7 +376,7 @@ macOS packaging supports both signed/notarized releases and unsigned ad-hoc buil
 
 1. Clear the Gatekeeper quarantine extended attribute:
    ```bash
-   xattr -cr /Applications/OpenChamber.app
+   xattr -cr /Applications/OhPiChamber.app
    ```
 2. Alternatively, Control-click (or right-click) the application in Finder, select **Open**, and click **Open** in the confirmation dialog.
 
@@ -477,7 +477,7 @@ The server (`packages/web/server/lib/fs/ripgrep.js`) looks for ripgrep in this o
 |----------|-----|
 | `OPENCHAMBER_ELECTRON_DEV=1` | Marks the runtime as desktop development mode |
 | `OPENCHAMBER_ELECTRON_USE_BUNDLED_UI=1` | Uses staged web assets instead of the HMR dev server |
-| `OPENCHAMBER_SKIP_LOCAL_SERVER=1` | Skips the in-process local OpenChamber server and uses the configured default remote instance; Desktop imports this from the user's login-shell environment, and packaged/bundled UI remains available for connection recovery. The host switcher then lists no Local entry and names the window's address as the current instance. Every start that skips the server, or opens `OPENCHAMBER_SERVER_URL`, says so in `main.log`, because a launcher that inherits these variables leaves no other trace |
+| `OPENCHAMBER_SKIP_LOCAL_SERVER=1` | Skips the in-process local OhPiChamber server and uses the configured default remote instance; Desktop imports this from the user's login-shell environment, and packaged/bundled UI remains available for connection recovery. The host switcher then lists no Local entry and names the window's address as the current instance. Every start that skips the server, or opens `OPENCHAMBER_SERVER_URL`, says so in `main.log`, because a launcher that inherits these variables leaves no other trace |
 | `OPENCHAMBER_HMR_UI_PORT` | Preferred Vite UI port for desktop dev, default `5173` |
 | `OPENCHAMBER_HMR_API_PORT` | Preferred API port for desktop dev, default `3901` |
 | `OPENCHAMBER_ELECTRON_REMOTE_DEBUGGING_PORT` | Development only: opens Chromium's DevTools protocol on this loopback port so a debugger can attach to the dev window; ignored in packaged builds |
@@ -532,7 +532,7 @@ The server (`packages/web/server/lib/fs/ripgrep.js`) looks for ripgrep in this o
 - Local and remote instance handling. The switcher lists Local only with the origin main reports for the local server, never with the page's own origin. A window can show another instance's own page, for example after a connect link redirects to that server. Such a page cannot switch to Local in place, because the local server answers only the app's own origins and the local token stays with local pages. The switcher asks main through the remote-safe `desktop_switch_to_local`, and main loads the Local UI into the main window the way `ohpichamber://host/local` does. The command acts only for the main window, because other windows keep the runtime they were opened with. Everywhere else it returns false and the switcher switches in place.
 - Which instance a new window opens on. The main window and the menu New Window open the default instance: on launch the renderer reconnects a relay-capable default host (`restoreDesktopRelayRuntime` with no target). A window opened for a specific instance (the switcher's "Open in new window", a host deep link, Mini Chat) is marked with `--openchamber-explicit-runtime` and keeps that instance. A direct instance arrives as an injected endpoint and skips the restore; a relay-capable one arrives as `--openchamber-relay-host-id`, and the renderer connects it with `reconnectActive`, because boot already set that host's runtime key and a plain restore would treat the window as connected. Mini Chat passes the parent's runtime key, so main resolves a relay-capable parent to its host id. Windows opened for a configured host carry the host's id as a tag (`__ocHostWindowId`), and the renderer reports its live runtime key to main at boot and on every switch (`desktop_set_window_runtime_key`), so `openHostWindow` finds the window to reuse by the live key first and the tag second: a link or notification click for a host that is already open lands in that window instead of opening another.
 - SSH host import, connections, logs, and port forwarding.
-- Managed SSH Hosts require OpenChamber and its Node/Bun runtime, not an OpenCode CLI. Remote discovery and installation still resolve OpenChamber, Bun and npm from the user's home, XDG cache and nvm locations; startup preserves those runtime paths without probing OpenCode or setting `OPENCODE_BINARY`. SSH authentication, password-protected network binding and credential cleanup are unchanged. This native SSH spawning path does not apply to Web/PWA, hosted or Capacitor clients.
+- Managed SSH Hosts require OhPiChamber and its Node/Bun runtime, not an OpenCode CLI. Remote discovery and installation still resolve OhPiChamber, Bun and npm from the user's home, XDG cache and nvm locations; startup preserves those runtime paths without probing OpenCode or setting `OPENCODE_BINARY`. SSH authentication, password-protected network binding and credential cleanup are unchanged. This native SSH spawning path does not apply to Web/PWA, hosted or Capacitor clients.
 - SSH uses OpenSSH ControlMaster on macOS/Linux. Windows uses independent hidden OpenSSH processes for setup commands and each long-lived forward because Win32 OpenSSH does not support ControlMaster reliably.
 - With ControlMaster, every forward, the main one included, is added with `ssh -O forward`: the master holds the listener, and that command's exit status is the answer. A `-N -L` client through the master would open a remote login shell and exit with that shell's status, which says nothing about the forward. The connection monitor then watches the local port and the master.
 - A managed SSH instance runs one server per remote host. The server outlives the SSH session by default (`keepRunning`), so every connect first asks the remote CLI (`ohpichamber status --json`) what is already running and reuses a server that fits the instance's password. `/api/system/info` is public, so an answer proves nothing about the password: the server has to accept it on `/auth/session`, or have none when the instance has none. An instance without a password starts servers with the `OPENCHAMBER_UI_PASSWORD` the remote login shell sets, so a protected server is checked against that one; the probe pipes it to curl on the remote, so the desktop never asks for it and it stays out of command lines. Among the servers that fit, a CLI-started daemon of another app version, or one whose bind address no longer matches the instance's network setting, is stopped and replaced. A registered server that is passed over gets a line in the connect log saying why. Foreground servers and servers with another password are neither reused nor stopped. With `keepRunning` off, disconnecting stops an adopted daemon the same way it stops one this session started. The server is shared by every client that fits it, so that stop also ends it for any other client still connected. Starting a server without this lookup leaks one server plus its opencode per reconnect.

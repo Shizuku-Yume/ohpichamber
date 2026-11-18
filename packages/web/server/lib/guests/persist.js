@@ -141,7 +141,7 @@ const dataDirSchema = z.string().min(1).refine((entry) => !entry.includes('\0') 
 export const extensionsPersistPath = (dataDir) => {
   const parsed = dataDirSchema.safeParse(dataDir);
   if (!parsed.success) {
-    throw new Error('Guest persist needs an absolute OpenChamber data dir');
+    throw new Error('Guest persist needs an absolute OhPiChamber data dir');
   }
   return path.join(parsed.data, 'extensions.json');
 };

@@ -17,9 +17,9 @@ Uma sessão de worktree roda em sua própria cópia do seu repositório, em seu 
 3. Confira **Based on** (o branch de onde um novo parte; por padrão, o branch padrão do remoto, como `origin/main`) e **Folder name**; mude só se precisar.
 4. Crie-a. Se o projeto tiver comandos de setup, eles rodam logo em seguida.
 
-O OpenChamber cria o branch, configura a pasta e abre uma nova sessão ali, pronta para sua primeira mensagem. Você também pode iniciar uma direto de uma [tarefa](/pt-br/notes-todos-plans/) ou de uma [issue ou pull request](/pt-br/github/).
+O OhPiChamber cria o branch, configura a pasta e abre uma nova sessão ali, pronta para sua primeira mensagem. Você também pode iniciar uma direto de uma [tarefa](/pt-br/notes-todos-plans/) ou de uma [issue ou pull request](/pt-br/github/).
 
-Para pular as perguntas, escolha **Worktree rápido** no mesmo menu de branches: o OpenChamber dá ao branch um nome provisório e aponta a nova sessão para ele. Quando o agente dá um nome à tarefa, ele também renomeia o branch de acordo com ela, como `fix/login-timeout`, desde que o branch ainda não tenha sido enviado com push.
+Para pular as perguntas, escolha **Worktree rápido** no mesmo menu de branches: o OhPiChamber dá ao branch um nome provisório e aponta a nova sessão para ele. Quando o agente dá um nome à tarefa, ele também renomeia o branch de acordo com ela, como `fix/login-timeout`, desde que o branch ainda não tenha sido enviado com push.
 
 ## Na barra lateral
 
@@ -27,7 +27,7 @@ Um worktree é uma linha na barra lateral, com todas as sessões dele embaixo. D
 
 ## Projetos abertos em uma pasta do repositório
 
-Se você abre um projeto em uma pasta dentro de um repositório, como `repo/ai`, os novos worktrees também abrem ali. Uma sessão em um novo worktree começa na mesma pasta do checkout, e assim o agente encontra a configuração que está nela. Um projeto aberto na raiz do repositório começa na raiz do worktree, como antes. Se uma branch não tiver essa pasta, a sessão começa na raiz do worktree e o OpenChamber avisa você.
+Se você abre um projeto em uma pasta dentro de um repositório, como `repo/ai`, os novos worktrees também abrem ali. Uma sessão em um novo worktree começa na mesma pasta do checkout, e assim o agente encontra a configuração que está nela. Um projeto aberto na raiz do repositório começa na raiz do worktree, como antes. Se uma branch não tiver essa pasta, a sessão começa na raiz do worktree e o OhPiChamber avisa você.
 
 ## Trazer o trabalho de volta
 
@@ -35,7 +35,7 @@ Quando o trabalho estiver bom, use **Integrate** na visão de Git para trazer os
 
 ## Limpeza
 
-Quando a tarefa terminar, escolha **Arquivar o worktree** no menu da linha, ou segure Shift e clique no botão de arquivar que aparece na linha no lugar do botão de nova sessão. O OpenChamber arquiva o worktree: a pasta some, e as sessões, as mudanças sem commit e o branch dele ficam esperando na página Arquivo. Se uma sessão ainda estiver rodando ali, o worktree fica.
+Quando a tarefa terminar, escolha **Arquivar o worktree** no menu da linha, ou segure Shift e clique no botão de arquivar que aparece na linha no lugar do botão de nova sessão. O OhPiChamber arquiva o worktree: a pasta some, e as sessões, as mudanças sem commit e o branch dele ficam esperando na página Arquivo. Se uma sessão ainda estiver rodando ali, o worktree fica.
 
 Marcar a linha como concluída só a tira de Em andamento. Para arquivar um worktree sempre que você o marcar como concluído, ou quando o PR dele for mesclado, ative isso em **Configurações → Sessões → Worktrees concluídos**.
 
@@ -45,9 +45,9 @@ Para se livrar de um worktree de vez, exclua-o pelo menu dele, ou exclua um arqu
 
 ## Se algo parecer errado
 
-Um worktree pode precisar de atenção se sua pasta sumiu, se seu branch está em estado detached ou se um merge ou rebase ficou pela metade. O OpenChamber sinaliza esses casos para você corrigi-los — veja [Worktrees e Git](/pt-br/troubleshooting/worktrees-git/).
+Um worktree pode precisar de atenção se sua pasta sumiu, se seu branch está em estado detached ou se um merge ou rebase ficou pela metade. O OhPiChamber sinaliza esses casos para você corrigi-los — veja [Worktrees e Git](/pt-br/troubleshooting/worktrees-git/).
 
 ## Relacionado
 
 - [Multi-run](/pt-br/multi-run/) — lance muitas sessões de worktree de uma vez
-- [Fluxos de Git](/pt-br/git/) — faça commit e integre de dentro do OpenChamber
+- [Fluxos de Git](/pt-br/git/) — faça commit e integre de dentro do OhPiChamber

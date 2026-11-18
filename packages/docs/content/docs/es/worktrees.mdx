@@ -17,9 +17,9 @@ Una sesión de worktree se ejecuta en su propia copia del repositorio, en su pro
 3. Revisa **Based on** (la rama desde la que parte una nueva; por defecto, la rama predeterminada del remoto, como `origin/main`) y **Folder name**; cámbialos solo si lo necesitas.
 4. Créala. Si el proyecto tiene comandos de configuración, se ejecutan justo después.
 
-OpenChamber crea la rama, configura la carpeta y abre ahí una nueva sesión, lista para tu primer mensaje. También puedes arrancar una directamente desde una [tarea](/es/notes-todos-plans/) o desde una [issue o pull request](/es/github/).
+OhPiChamber crea la rama, configura la carpeta y abre ahí una nueva sesión, lista para tu primer mensaje. También puedes arrancar una directamente desde una [tarea](/es/notes-todos-plans/) o desde una [issue o pull request](/es/github/).
 
-Para saltarte las preguntas, elige **Worktree rápido** en el mismo menú de ramas: OpenChamber le pone a la rama un nombre provisional y apunta la nueva sesión a ella. Cuando el agente le pone nombre a la tarea, también renombra la rama según ella, por ejemplo `fix/login-timeout`, siempre que la rama no se haya subido todavía.
+Para saltarte las preguntas, elige **Worktree rápido** en el mismo menú de ramas: OhPiChamber le pone a la rama un nombre provisional y apunta la nueva sesión a ella. Cuando el agente le pone nombre a la tarea, también renombra la rama según ella, por ejemplo `fix/login-timeout`, siempre que la rama no se haya subido todavía.
 
 ## En la barra lateral
 
@@ -27,7 +27,7 @@ Un worktree es una fila en la barra lateral, con todas sus sesiones debajo. Dent
 
 ## Proyectos abiertos en una carpeta del repositorio
 
-Si abres un proyecto en una carpeta dentro de un repositorio, como `repo/ai`, los nuevos worktrees se abren también allí. Una sesión en un worktree nuevo empieza en la misma carpeta del checkout, así el agente encuentra la configuración que está en ella. Un proyecto abierto en la raíz del repositorio empieza en la raíz del worktree, como antes. Si una rama no tiene esa carpeta, la sesión empieza en la raíz del worktree y OpenChamber te lo indica.
+Si abres un proyecto en una carpeta dentro de un repositorio, como `repo/ai`, los nuevos worktrees se abren también allí. Una sesión en un worktree nuevo empieza en la misma carpeta del checkout, así el agente encuentra la configuración que está en ella. Un proyecto abierto en la raíz del repositorio empieza en la raíz del worktree, como antes. Si una rama no tiene esa carpeta, la sesión empieza en la raíz del worktree y OhPiChamber te lo indica.
 
 ## Trae el trabajo de vuelta
 
@@ -35,7 +35,7 @@ Cuando el trabajo esté listo, usa **Integrate** en la vista de Git para traer l
 
 ## Limpieza
 
-Cuando termines la tarea, elige **Archivar el worktree** en el menú de la fila, o mantén pulsado Shift y haz clic en el botón de archivar que aparece en la fila en lugar del botón de nueva sesión. OpenChamber lo archiva: la carpeta desaparece, y sus sesiones, sus cambios sin commit y su rama esperan en la página Archivo. Si una sesión sigue en marcha allí, el worktree se queda.
+Cuando termines la tarea, elige **Archivar el worktree** en el menú de la fila, o mantén pulsado Shift y haz clic en el botón de archivar que aparece en la fila en lugar del botón de nueva sesión. OhPiChamber lo archiva: la carpeta desaparece, y sus sesiones, sus cambios sin commit y su rama esperan en la página Archivo. Si una sesión sigue en marcha allí, el worktree se queda.
 
 Marcar la fila como hecha solo la saca de En curso. Para archivar un worktree cada vez que lo marques como hecho, o cuando se fusione su PR, actívalo en **Configuración → Sesiones → Worktrees terminados**.
 
@@ -45,9 +45,9 @@ Para deshacerte de un worktree para siempre, elimínalo desde su menú, o elimin
 
 ## Si algo no encaja
 
-Un worktree puede requerir atención si su carpeta desapareció, su rama está en un estado desacoplado, o una fusión o rebase quedó a medias. OpenChamber lo señala para que lo arregles; consulta [Worktrees y Git](/es/troubleshooting/worktrees-git/).
+Un worktree puede requerir atención si su carpeta desapareció, su rama está en un estado desacoplado, o una fusión o rebase quedó a medias. OhPiChamber lo señala para que lo arregles; consulta [Worktrees y Git](/es/troubleshooting/worktrees-git/).
 
 ## Relacionado
 
 - [Multi-run](/es/multi-run/) — lanza muchas sesiones de worktree a la vez
-- [Flujos de trabajo de Git](/es/git/) — haz commit e integra desde dentro de OpenChamber
+- [Flujos de trabajo de Git](/es/git/) — haz commit e integra desde dentro de OhPiChamber

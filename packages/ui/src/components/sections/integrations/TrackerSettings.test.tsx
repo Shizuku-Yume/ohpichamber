@@ -263,7 +263,7 @@ describe('TrackerSettings', () => {
     expect(container.textContent).toContain('Acme Tickets');
     expect(container.querySelector('[data-settings-item="integrations.acme-tickets"]')).not.toBeNull();
     expect(buttonLabels()).not.toContain('Connect');
-    expect(container.textContent).toContain('Update OpenChamber');
+    expect(container.textContent).toContain('Update OhPiChamber');
   });
 
   const type = async (input: HTMLInputElement, value: string) => {
@@ -298,7 +298,7 @@ describe('TrackerSettings', () => {
     expect(container.textContent).toContain('Client ID');
     expect(container.textContent).not.toContain('The token needs:');
     expect(inputs().some((input) => input.readOnly && input.value === 'http://localhost/api/tracker/ext-youtrack/oauth/callback')).toBe(true);
-    expect(container.textContent).not.toContain('Update OpenChamber');
+    expect(container.textContent).not.toContain('Update OhPiChamber');
 
     await click('API token');
     expect(container.textContent).not.toContain('Client ID');

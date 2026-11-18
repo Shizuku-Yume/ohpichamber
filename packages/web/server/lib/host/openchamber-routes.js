@@ -26,7 +26,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     const version = String(req.query.version ?? '');
     const since = req.query.since === undefined ? undefined : String(req.query.since);
     if (!isVersion(version) || (since !== undefined && !isVersion(since))) {
-      return res.status(400).json({ error: 'version and since must be OpenChamber versions' });
+      return res.status(400).json({ error: 'version and since must be OhPiChamber versions' });
     }
     const { compareVersions } = await import('../version-order.js');
     const releases = await fetchReleaseNotes(version, since, compareVersions);

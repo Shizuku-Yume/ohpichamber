@@ -24,7 +24,7 @@ import { getLocalSttModelDir, getLocalSttModelSpec } from './model-catalog.js';
 import { resolveModelLanguage } from './model-language.js';
 import { pcm16ToWav } from '../audio.js';
 
-process.title = 'OpenChamber Dictation';
+process.title = 'OhPiChamber Dictation';
 
 const engines = new Map();
 const ttsEngines = new Map();

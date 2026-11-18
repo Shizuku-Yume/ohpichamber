@@ -15,6 +15,7 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 
 const GITHUB_URL = 'https://github.com/Shizuku-Yume/ohpichamber';
+const UPSTREAM_GITHUB_URL = 'https://github.com/openchamber/openchamber';
 
 /** Version of the server this page is served by, from `/api/system/info`. */
 function useServerVersion(): string | null {
@@ -78,7 +79,7 @@ export const AboutSettings: React.FC = () => {
         <div className="flex items-center gap-4">
           <AboutLogo size={48} />
           <div className="min-w-0 space-y-1">
-            <h2 className={SETTINGS_BRAND_TITLE_CLASS}>OpenChamber</h2>
+            <h2 className={SETTINGS_BRAND_TITLE_CLASS}>OhPiChamber</h2>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {[
                 { href: GITHUB_URL, icon: 'github-fill' as const, label: 'GitHub' },
@@ -121,7 +122,23 @@ export const AboutSettings: React.FC = () => {
 
       <AboutReleaseNotes version={serverVersion || appVersion} />
 
-      <p className="text-center text-muted-foreground">{t('aboutDialog.footerNote')}</p>
+      <div className="space-y-2 text-center">
+        <p className="text-muted-foreground">{t('aboutDialog.footerNote')}</p>
+        <div className="space-y-0.5 typography-meta text-muted-foreground">
+          <p>
+            <a
+              href={UPSTREAM_GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+            >
+              <span>{t('settings.openchamber.about.credit')}</span>
+              <Icon name="external-link" className="size-3.5" />
+            </a>
+          </p>
+          <p>{t('settings.openchamber.about.creditLicense')}</p>
+        </div>
+      </div>
     </>
   );
 };

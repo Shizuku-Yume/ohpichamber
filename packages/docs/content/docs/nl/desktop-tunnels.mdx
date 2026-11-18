@@ -5,11 +5,11 @@ description: Maak Cloudflare-, Ngrok- of Tailscale-tunnels vanuit de desktopapp.
 
 # Desktoptunnels
 
-De desktopapp kan een tunnel maken via **Instellingen → OpenChamber → Tunnel**. Daarvoor hoeft u OpenChamber niet vanuit de CLI te starten.
+De desktopapp kan een tunnel maken via **Instellingen → OhPiChamber → Tunnel**. Daarvoor hoeft u OhPiChamber niet vanuit de CLI te starten.
 
 ## Een provider installeren
 
-OpenChamber start de CLI van de provider op uw computer. Installeer eerst de gewenste provider:
+OhPiChamber start de CLI van de provider op uw computer. Installeer eerst de gewenste provider:
 
 ```bash
 brew install cloudflared
@@ -26,7 +26,7 @@ Voor Tailscale installeert u de [Tailscale-app](https://tailscale.com/download) 
 
 ## Starten vanuit de app
 
-1. Open **Instellingen → OpenChamber → Tunnel**.
+1. Open **Instellingen → OhPiChamber → Tunnel**.
 2. Kies **Cloudflare**, **Ngrok** of **Tailscale**.
 3. Kies het tunneltype en selecteer **Tunnel starten**.
 4. Scan de gegenereerde QR-code met uw telefoon.
@@ -35,9 +35,9 @@ Ngrok ondersteunt momenteel snelle tunnels. Cloudflare ondersteunt zowel snelle 
 
 ## Toegangsbescherming
 
-Ook als de provider-URL openbaar is, beschermt OpenChamber de toegang met een eigen verbindingstoken. De gegenereerde link bevat een eenmalig token met een geldigheidsduur. Oude ongebruikte links worden ingetrokken wanneer u een nieuwe maakt of de tunnel stopt of herstart.
+Ook als de provider-URL openbaar is, beschermt OhPiChamber de toegang met een eigen verbindingstoken. De gegenereerde link bevat een eenmalig token met een geldigheidsduur. Oude ongebruikte links worden ingetrokken wanneer u een nieuwe maakt of de tunnel stopt of herstart.
 
 ## Zie ook
 
 - [Tunnels](/nl/tunnels/) voor de CLI en beheerde Cloudflare-modi
-- [PWA en mobiel](/nl/mobile/) om OpenChamber vanaf uw telefoon te bereiken
+- [PWA en mobiel](/nl/mobile/) om OhPiChamber vanaf uw telefoon te bereiken

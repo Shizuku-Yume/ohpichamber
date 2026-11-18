@@ -160,7 +160,7 @@ export function registerTrackerRoutes(app, { registry }) {
         error: queryValue(req, 'error'),
         errorDescription: queryValue(req, 'error_description'),
       });
-      return finish(200, 'Connected', 'You can close this tab and return to OpenChamber.');
+      return finish(200, 'Connected', 'You can close this tab and return to OhPiChamber.');
     } catch (error) {
       if (error instanceof TrackerRouteError || isUserError(error)) {
         return finish(400, 'Could not connect', error.message);

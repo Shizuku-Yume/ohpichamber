@@ -5,7 +5,7 @@ description: Bepaal per sessie hoeveel de agent mag doen zonder het te vragen.
 
 # Toestemmingen en vangnet
 
-Elke actie van de agent (een opdracht uitvoeren, een bestand bewerken, een MCP-tool aanroepen of een pagina ophalen) wordt geëvalueerd door de Host-authorizer en het worker-beleid van de Agent Service. De toestemmingsmodi van OpenChamber bepalen wat er gebeurt wanneer voor een actie goedkeuring vereist is.
+Elke actie van de agent (een opdracht uitvoeren, een bestand bewerken, een MCP-tool aanroepen of een pagina ophalen) wordt geëvalueerd door de Host-authorizer en het worker-beleid van de Agent Service. De toestemmingsmodi van OhPiChamber bepalen wat er gebeurt wanneer voor een actie goedkeuring vereist is.
 
 ## Toestaan, vragen en weigeren
 
@@ -23,7 +23,7 @@ Om in te stellen welke tools een agent kan zien en aanroepen, gebruikt u het vel
 | --- | --- |
 | **Telkens vragen** | U. Elk verzoek wacht op uw antwoord. |
 | **Vangnet** | Jev laat routineacties door en houdt riskante acties voor u tegen. |
-| **Alles accepteren** | OpenChamber antwoordt altijd ja. Elk verzoek wordt direct toegestaan, zonder controle. |
+| **Alles accepteren** | OhPiChamber antwoordt altijd ja. Elk verzoek wordt direct toegestaan, zonder controle. |
 
 **Alles accepteren** heeft niets extra nodig. Het behandelt elk `ask` eenvoudigweg als toegestaan. Gebruik dit als u de taak vertrouwt en geen onderbrekingen wilt.
 
@@ -36,7 +36,7 @@ Subagents volgen de sessie die ze heeft gestart.
 
 ## Het vangnet
 
-In deze modus vraagt OpenChamber [Jev](/nl/classification-providers/) bij elk verzoek of het om een routineactie gaat of om iets waarover u moet beslissen. Lezen, bouwen, tests uitvoeren, projectbestanden bewerken en gewone commits gaan door. Git-geschiedenis herschrijven, gegevens verwijderen, het systeem wijzigen, uitrollen, iets publiceren of bestanden naar buiten versturen wacht op u. Dat geldt ook voor onduidelijke acties.
+In deze modus vraagt OhPiChamber [Jev](/nl/classification-providers/) bij elk verzoek of het om een routineactie gaat of om iets waarover u moet beslissen. Lezen, bouwen, tests uitvoeren, projectbestanden bewerken en gewone commits gaan door. Git-geschiedenis herschrijven, gegevens verwijderen, het systeem wijzigen, uitrollen, iets publiceren of bestanden naar buiten versturen wacht op u. Dat geldt ook voor onduidelijke acties.
 
 Een tegengehouden verzoek toont de gebruikelijke toestemmingskaart, met de extra regel **Het vangnet heeft deze actie tegengehouden zodat u kunt beslissen** en het soort actie. Als Jev niet binnen vier seconden kan antwoorden, wacht de actie ook op u. Een mislukte controle is nooit reden om een actie toe te staan.
 
@@ -44,7 +44,7 @@ Het vangnet vereist een [classificatieprovider](/nl/classification-providers/). 
 
 ## Blijft werken als u weg bent
 
-De modus wordt op de OpenChamber-server bijgehouden. Verzoeken blijven dus beantwoord worden als u het tabblad sluit of uw telefoon vergrendelt. De instelling blijft ook na een herstart behouden.
+De modus wordt op de OhPiChamber-server bijgehouden. Verzoeken blijven dus beantwoord worden als u het tabblad sluit of uw telefoon vergrendelt. De instelling blijft ook na een herstart behouden.
 
 
 ## Zie ook

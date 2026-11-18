@@ -74,7 +74,7 @@ export function createOutboundHandles({ fetch: fetchImpl = (input, init) => fetc
    */
   const mint = ({ guestId, providerId, origin, credential = null, deadline, methods }) => {
     if (credential?.scheme === 'basic' && !isProviderUsername(credential.login)) {
-      throw Object.assign(new Error('This Git host signs in with a username, and the account has none OpenChamber can send'), {
+      throw Object.assign(new Error('This Git host signs in with a username, and the account has none OhPiChamber can send'), {
         status: 400, code: 'SOURCE_CONTROL_USERNAME_REQUIRED',
       });
     }

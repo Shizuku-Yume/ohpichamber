@@ -1,6 +1,6 @@
 # ohpichamber-sdk
 
-Build extensions for [OpenChamber](https://github.com/Shizuku-Yume/ohpichamber). An extension can show a panel on the right-hand rail or run actions in the background without a panel. It can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, once the user approves it, start sessions and send prompts. This package is the contract between the extension and the app.
+Build extensions for [OhPiChamber](https://github.com/Shizuku-Yume/ohpichamber). An extension can show a panel on the right-hand rail or run actions in the background without a panel. It can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, once the user approves it, start sessions and send prompts. This package is the contract between the extension and the app.
 
 Full guide: [Build an extension](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Reference: [Host API](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) and [UI kit](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 
@@ -14,7 +14,7 @@ Device-scoped extension storage is local browser preference data. It stays parti
 npm install ohpichamber-sdk
 ```
 
-The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OpenChamber release it shipped with, so `ohpichamber-sdk@1.0.0` is the contract of OhPiChamber 1.0.0.
+The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OhPiChamber release it shipped with, so `ohpichamber-sdk@1.0.0` is the contract of OhPiChamber 1.0.0.
 
 SDK 3 replaces the pre-M3 parent-window transport with a private, versioned `MessagePort` bootstrap. A panel that still sends the pre-M3 v1 window `hello` cannot connect: the host names the version mismatch in the pane and never grants it a port, ready state, or host state. A v1 bootstrap announcement is dropped without granting anything. Rebuild the panel with SDK 3. Manifest `apiVersion` remains `1`; it names the manifest schema, which did not change.
 
@@ -29,7 +29,7 @@ bunx openchamber-guest-bundle panel/main.ts panel/main.js
 
 ## Preview builds
 
-Preview packages are for testing unreleased SDK changes against a matching development build of OpenChamber. They do not imply compatibility with the published app of the same base version.
+Preview packages are for testing unreleased SDK changes against a matching development build of OhPiChamber. They do not imply compatibility with the published app of the same base version.
 
 ```bash
 npm install ohpichamber-sdk@preview
@@ -44,22 +44,22 @@ The workflow must exist on the default branch before GitHub exposes its manual t
 A folder with three files:
 
 - `package.json` with an `openchamber` block (the manifest)
-- `panel/index.html`, the page OpenChamber shows
+- `panel/index.html`, the page OhPiChamber shows
 - `panel/main.js`, your script built into one classic file (an IIFE; the page runs in a sandboxed iframe and cannot load ES modules)
 
-OpenChamber never compiles your code. Build `panel/main.js` yourself. The package includes a bundler command that runs on Bun; esbuild with `--format=iife --platform=browser` does the same job.
+OhPiChamber never compiles your code. Build `panel/main.js` yourself. The package includes a bundler command that runs on Bun; esbuild with `--format=iife --platform=browser` does the same job.
 
 ```bash
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
-Then install the folder from Settings → Extensions → Add. Folder installs run from your folder, so edit, rebuild, and reload. A `.zip` or an https git or zip link is copied into OpenChamber's data folder instead; ship the built files only. Git installs can update from Settings → Extensions when the repository's `version` is newer than the installed one, so bump `version` to ship an update; `https://…/panel.git#v1` pins a tag or branch.
+Then install the folder from Settings → Extensions → Add. Folder installs run from your folder, so edit, rebuild, and reload. A `.zip` or an https git or zip link is copied into OhPiChamber's data folder instead; ship the built files only. Git installs can update from Settings → Extensions when the repository's `version` is newer than the installed one, so bump `version` to ship an update; `https://…/panel.git#v1` pins a tag or branch.
 
 A complete three-file example is on the [Build an extension](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) page. Six examples are at [github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk/examples](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk/examples).
 
 ## Manifest
 
-Git installs also accept SSH addresses such as `git@github.com:owner/extension.git` and `ssh://git@github.com/owner/extension.git`. The fingerprint menu in Settings → Extensions selects Global Identity or a Git identity on the active server. That identity is reused for update checks and updates. On a remote instance, SSH keys and any unlocked SSH agent must be available to the server process, not just your desktop. See [Extensions](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/docs/content/docs/extensions) for details.
+Git installs also accept SSH addresses such as `git@github.com:owner/extension.git` and `ssh://git@github.com/owner/extension.git`. The fingerprint menu in Settings → Extensions selects Global Identity or a Git identity on the active server. That identity is reused for update checks and updates. On a remote instance, SSH keys and any unlocked SSH agent must be available to the server process, not just your desktop. See [Extensions](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/docs/content/docs/extensions.mdx) for details.
 
 ```json
 {
@@ -98,7 +98,7 @@ Git installs also accept SSH addresses such as `git@github.com:owner/extension.g
 
 - `version` is required semver. Settings → Extensions shows it on the card.
 - `apiVersion` is `1`. Anything else is refused.
-- `engines.openchamber` is optional (`1.0.0` or `>=1.0.0`). Older OpenChamber builds refuse the install.
+- `engines.openchamber` is optional (`1.0.0` or `>=1.0.0`). Older OhPiChamber builds refuse the install.
 - `panel.id` is kebab-case and unique. `icon` is a Remixicon name (`RiWindowLine` becomes `window`) or an SVG inside the folder. `entry` is the visible panel's HTML file. Leave `entry` out to have no rail icon or panel. Add `background.entry` for executable actions and commands; with neither entry, the extension can only declare `tools`, as in `examples/tools-only`, and `providerLogos`.
 - `background: { "entry": "background/index.html" }` supplies separate sandboxed HTML for background actions and slash commands. Its scripts must be built. It runs on demand, not continuously or at installation. A panel can coexist with it.
 - `attach` is optional. `"dialog"` opens the page in a window from the + menu next to the chat box; `true` or `"panel"` opens the rail panel instead. `ctx.surface` tells the page which one it is in. The object form `{ "mode": "dialog", "entry": "panel/attach.html" }` gives the window its own page. When the user clicks the attached chip, the page opens again with that item in `ctx.item` (`null` from the + menu), so it can show the item instead of the list.
@@ -106,8 +106,8 @@ Git installs also accept SSH addresses such as `git@github.com:owner/extension.g
 - `commands` is optional: slash commands for the chat box, up to 8. `/task DEMO-2` calls your `host.onResolve` handler instead of the model; return a chip to attach it, or `null` for nothing. A name the app already has is ignored.
 - `tools` is optional: how your tool calls look in the chat, up to 16, no code. `match` is the tool name OpenCode reports (`mcp.tasks.*` matches every tool under that prefix); `name` and `icon` (a Remixicon name or an SVG inside the folder, like `panel.icon`) set the header, `title` and `subtitle` are templates like `{input.id}` or `{output.total} open`, and `output` picks the body: `text`, `json`, `markdown`, `code` (with `language`), or `table` (with `columns`, rows from the output array or `output.items`). Leave `output` out to keep the app's own detection.
 - `capabilities` lists what needs the user's approval: `prompt` to send messages, `sessions` to create sessions and worktrees, `files` to read and write inside the open project, `model` for one-off text generation with the user's Small Model (`host.generate`, no session involved). An `integration` adds `network`, a `service` adds `service`, `filesystem` patterns (like `["~/.config/opencode/opencode.json"]`) add `filesystem`, which lets `readFile`, `writeFile`, `listDir`, and `stat` reach those paths outside the project, a session action with `payload: ["messages"]` adds `conversation`, and `sessionEvents` with `content: true` adds `transcript` (what the agent said or asked, delivered to the service). The user approves the whole list once at install. Calls outside it fail with `NOT_GRANTED`.
-- `integration` is optional. It adds a card at Settings → Integrations. `token` takes a pasted API token (`scheme: "bearer"` for `Authorization: Bearer`, `"basic"` for a username and token pair as Jira Cloud wants), `oauth` runs an authorize flow with a pasted client id, and `host: { "provider": "linear" }` reuses the Linear account already connected in OpenChamber. The page never sees the token; OpenChamber makes the calls through `host.request`.
-- `service` is optional. It declares a local process OpenChamber starts next to the extension. It runs with the user's full access and no sandbox, so declare one only when the page cannot do the job. See [GUEST_SERVICES.md](./GUEST_SERVICES.md). With `provides: ["browser"]` the service can stand in for the agent's browser, so agents browse on the server with no desktop app open; the user picks it in Settings → OpenChamber Tools. With `surface: true` it shows a live picture in the rail that the user can watch and take over, and hand back to the agent; add `panel.entry` (with `panel.dock` and `panel.size`) for your own controls docked beside it. With `contributes.sessionEvents` beside it, OpenChamber tells the service when a turn finishes or fails and when the agent asks permission or a question, in every project and with no window open; `content: true` adds the text of each (the `transcript` capability). With `provides: ["notifications"]` and `contributes.notifications`, the service delivers the user's notifications next to the desktop and the phone; the user connects the account in Settings → Integrations and the token stays in OpenChamber. With `provides: ["tracker"]` and `contributes.tracker`, the service is a work item tracker next to Linear: its items appear in the picker, the composer, New Worktree and linked items, the user connects accounts on its card under Extension accounts, and tokens stay in OpenChamber. An extension is a Git host or a tracker, never both.
+- `integration` is optional. It adds a card at Settings → Integrations. `token` takes a pasted API token (`scheme: "bearer"` for `Authorization: Bearer`, `"basic"` for a username and token pair as Jira Cloud wants), `oauth` runs an authorize flow with a pasted client id, and `host: { "provider": "linear" }` reuses the Linear account already connected in OhPiChamber. The page never sees the token; OhPiChamber makes the calls through `host.request`.
+- `service` is optional. It declares a local process OhPiChamber starts next to the extension. It runs with the user's full access and no sandbox, so declare one only when the page cannot do the job. See [GUEST_SERVICES.md](./GUEST_SERVICES.md). With `provides: ["browser"]` the service can stand in for the agent's browser, so agents browse on the server with no desktop app open; the user picks it in Settings → OhPiChamber Tools. With `surface: true` it shows a live picture in the rail that the user can watch and take over, and hand back to the agent; add `panel.entry` (with `panel.dock` and `panel.size`) for your own controls docked beside it. With `contributes.sessionEvents` beside it, OhPiChamber tells the service when a turn finishes or fails and when the agent asks permission or a question, in every project and with no window open; `content: true` adds the text of each (the `transcript` capability). With `provides: ["notifications"]` and `contributes.notifications`, the service delivers the user's notifications next to the desktop and the phone; the user connects the account in Settings → Integrations and the token stays in OhPiChamber. With `provides: ["tracker"]` and `contributes.tracker`, the service is a work item tracker next to Linear: its items appear in the picker, the composer, New Worktree and linked items, the user connects accounts on its card under Extension accounts, and tokens stay in OhPiChamber. An extension is a Git host or a tracker, never both.
 
 ## Actions without opening a panel
 
@@ -134,9 +134,9 @@ host.onAction(async (item) => {
 });
 ```
 
-Each click runs in a fresh hidden iframe. Await all work inside the handler, including the toast. OpenChamber removes the iframe when the handler finishes and reports thrown errors as toasts. Loading and execution together have a 20-second limit. A runtime switch, disabling the extension, or withdrawing approval also ends the invocation. Completed side effects are not rolled back or retried.
+Each click runs in a fresh hidden iframe. Await all work inside the handler, including the toast. OhPiChamber removes the iframe when the handler finishes and reports thrown errors as toasts. Loading and execution together have a 20-second limit. A runtime switch, disabling the extension, or withdrawing approval also ends the invocation. Completed side effects are not rolled back or retried.
 
-`ctx.surface` is `"background"`; skip drawing your UI in that case. `ctx.item` stays `null`, so the action runs only through `onAction`, without repeated `onItem` snapshots. The session and directory context stay with the clicked target even if the user changes chats. OpenChamber loads `background.entry` when declared and falls back to `panel.entry` for existing extensions. Omit `mode`, or use `"open"`, to open a visible panel or dialog. See `examples/hello-kit` for separate panel and background scripts.
+`ctx.surface` is `"background"`; skip drawing your UI in that case. `ctx.item` stays `null`, so the action runs only through `onAction`, without repeated `onItem` snapshots. The session and directory context stay with the clicked target even if the user changes chats. OhPiChamber loads `background.entry` when declared and falls back to `panel.entry` for existing extensions. Omit `mode`, or use `"open"`, to open a visible panel or dialog. See `examples/hello-kit` for separate panel and background scripts.
 
 To remove the panel and its rail icon entirely, leave `panel` out and name the extension beside `contributes`:
 
@@ -156,7 +156,7 @@ To remove the panel and its rail icon entirely, leave `panel` out and name the e
 
 Only `panel.entry` creates a rail icon.
 
-This addition requires a matching OpenChamber build. For unreleased SDK preview builds, use the app built from the same revision.
+This addition requires a matching OhPiChamber build. For unreleased SDK preview builds, use the app built from the same revision.
 
 ## Toast buttons
 
@@ -166,7 +166,7 @@ This addition requires a matching OpenChamber build. For unreleased SDK preview 
 - `dismiss: true` adds OK to close the toast.
 - `persistent: true` keeps the toast on screen until dismissed and always adds OK, even if `dismiss` is false.
 
-Copy keeps the toast open and shows Copied on success. A failed copy shows an error beside the button so the user can retry. OpenChamber translates the buttons and handles clicks itself, so they work after a background action's iframe has closed. `await host.toast(...)` waits only for the host to show the toast, not for a button click. Omit these fields for an ordinary timed toast.
+Copy keeps the toast open and shows Copied on success. A failed copy shows an error beside the button so the user can retry. OhPiChamber translates the buttons and handles clicks itself, so they work after a background action's iframe has closed. `await host.toast(...)` waits only for the host to show the toast, not for a button click. Omit these fields for an ordinary timed toast.
 
 ## In the page
 
@@ -267,9 +267,9 @@ host.onReady((ctx) => {
 });
 ```
 
-OpenChamber supplies thin, theme-aware native scrollbars inside extension documents, including nested lists, tabs, and textareas. Like the app's own, they stay hidden until you hover or scroll. The UI kit includes the same defaults for development previews. Existing installed bundles get the host stylesheet without rebuilding. Custom rendering hosts can use `GUEST_SCROLLBAR_CSS` from `ohpichamber-sdk`. Authors can override these default rules; an extension's CSP still applies.
+OhPiChamber supplies thin, theme-aware native scrollbars inside extension documents, including nested lists, tabs, and textareas. Like the app's own, they stay hidden until you hover or scroll. The UI kit includes the same defaults for development previews. Existing installed bundles get the host stylesheet without rebuilding. Custom rendering hosts can use `GUEST_SCROLLBAR_CSS` from `ohpichamber-sdk`. Authors can override these default rules; an extension's CSP still applies.
 
-The kit's look comes from the OpenChamber version that runs your extension: colours, borders, corner radii, and hover, selected and focus states follow the app after an update, with no rebuild on your side. Sizes and spacing stay the ones your bundle was built with, so a layout built around them doesn't shift; they change when you rebuild against a newer SDK. The app adds its look after your document, so to restyle a kit control, use a selector more specific than the kit's, such as `#root .oc-sdk-btn`. Custom rendering hosts can use `GUEST_UI_LOOK_CSS` from `ohpichamber-sdk/ui`.
+The kit's look comes from the OhPiChamber version that runs your extension: colours, borders, corner radii, and hover, selected and focus states follow the app after an update, with no rebuild on your side. Sizes and spacing stay the ones your bundle was built with, so a layout built around them doesn't shift; they change when you rebuild against a newer SDK. The app adds its look after your document, so to restyle a kit control, use a selector more specific than the kit's, such as `#root .oc-sdk-btn`. Custom rendering hosts can use `GUEST_UI_LOOK_CSS` from `ohpichamber-sdk/ui`.
 
 ## Schemas
 
@@ -277,4 +277,4 @@ The kit's look comes from the OpenChamber version that runs your extension: colo
 
 ## Scope
 
-This package covers the page, the manifest, the messages, and the UI kit. The page gets no terminal, no git, no files outside what it declared, and no access to OpenChamber's React tree. A declared `service` is different: it is a real process with the user's rights, so it can do anything the user can, and the approval dialog says so. `apiVersion` 1 is frozen; new methods arrive with the app's releases and this package's version.
+This package covers the page, the manifest, the messages, and the UI kit. The page gets no terminal, no git, no files outside what it declared, and no access to OhPiChamber's React tree. A declared `service` is different: it is a real process with the user's rights, so it can do anything the user can, and the approval dialog says so. `apiVersion` 1 is frozen; new methods arrive with the app's releases and this package's version.

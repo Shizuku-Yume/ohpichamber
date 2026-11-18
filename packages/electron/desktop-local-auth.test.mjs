@@ -47,7 +47,7 @@ describe('packaged local desktop authentication', () => {
     assert.equal(requests[0].init.credentials, 'omit');
     assert.equal(requests[0].init.redirect, 'error');
     assert.deepEqual(JSON.parse(requests[0].init.body), {
-      label: 'OpenChamber Desktop',
+      label: 'OhPiChamber Desktop',
       clientKind: 'desktop-local',
       dedupeKey: 'desktop-local',
     });

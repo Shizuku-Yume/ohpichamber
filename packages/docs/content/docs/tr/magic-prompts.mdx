@@ -1,11 +1,11 @@
 ---
 title: Sihirli İstemler
-description: OpenChamber'ın otomatik akışlarının arkasındaki yerleşik istemleri özelleştirin.
+description: OhPiChamber'ın otomatik akışlarının arkasındaki yerleşik istemleri özelleştirin.
 ---
 
 # Sihirli İstemler
 
-OpenChamber bir şeyi otomatik yaptığında arka planda yerleşik istemler kullanır. Commit mesajı yazmak, PR taslağı hazırlamak, issue incelemek, çakışmayı çözmek, bir oturumu özetlemek gibi. Magic Prompts, bu istemleri okuduğunuz ve yeniden yazdığınız yerdir. **Settings → Magic Prompts** bölümünden açın.
+OhPiChamber bir şeyi otomatik yaptığında arka planda yerleşik istemler kullanır. Commit mesajı yazmak, PR taslağı hazırlamak, issue incelemek, çakışmayı çözmek, bir oturumu özetlemek gibi. Magic Prompts, bu istemleri okuduğunuz ve yeniden yazdığınız yerdir. **Settings → Magic Prompts** bölümünden açın.
 
 Normal kullanım için bu sayfaya ihtiyacınız yok. Bir akışın farklı davranmasını istediğinizde buraya bakın. Mesela commit mesajlarının belirli bir stilde olmasını istiyorsanız.
 
@@ -15,7 +15,7 @@ Normal kullanım için bu sayfaya ihtiyacınız yok. Bir akışın farklı davra
 2. Kenar çubuğundaki gruplardan bir istem seçin. Git, Planning ve Session.
 3. Metni düzenleyin ve kaydedin.
 
-Bazı istemlerin görünen bir kısmı vardır. Bu, sizin göreceğiniz mesajdır. Bir de agent için gizli yönerge kısmı vardır. İstemler `{{placeholders}}` içerebilir. OpenChamber bunları doldurur. Mesela diff ya da issue başlığı gibi. Bunları olduğu gibi bırakın.
+Bazı istemlerin görünen bir kısmı vardır. Bu, sizin göreceğiniz mesajdır. Bir de agent için gizli yönerge kısmı vardır. İstemler `{{placeholders}}` içerebilir. OhPiChamber bunları doldurur. Mesela diff ya da issue başlığı gibi. Bunları olduğu gibi bırakın.
 
 ## Sıfırlama
 
@@ -23,7 +23,7 @@ Fikrinizi mi değiştirdiniz? Her istemde **reset to default** vardır. Her şey
 
 ## Proje istemleri
 
-Bir istemin tek bir projeye ait override'ı da olabilir. OpenChamber varsa proje override'ını, yoksa genel override'ınızı, o da yoksa yerleşik metni kullanır. Kaydedilmiş bir override boş olsa bile geçerlidir.
+Bir istemin tek bir projeye ait override'ı da olabilir. OhPiChamber varsa proje override'ını, yoksa genel override'ınızı, o da yoksa yerleşik metni kullanır. Kaydedilmiş bir override boş olsa bile geçerlidir.
 
 Eklemek için kenar çubuğunun üstündeki seçiciden projeyi seçin, sonra **Kapsam** altında **Proje**'yi seçin. Değiştirdiğiniz her bloğun altındaki **Kaydet** düğmesine tıklayın. Sıfırlama düğmeleri yalnızca açık olan kapsamı değiştirir. **Proje** kapsamında **Proje override'ını kaldır** ve **Tüm proje override'larını kaldır**, genel override'ınızı ya da yerleşik metni geri getirir. **Genel** kapsamda yerleşik metni kaydetmek genel override'ınızı kaldırır. **Proje** kapsamında bu metin kayıtlı kalır. Böylece genel override'ınız başka bir şey söylese de proje yerleşik metni korur.
 

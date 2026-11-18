@@ -52,3 +52,14 @@ An entry leaves this file in one of two ways:
 - **Impact:** installing any token catalog entry (Linear, Sentry, …) at user scope can make unrelated workspaces unable to save MCP configuration until the reference is removed by hand.
 - **Solution:** either force project scope for every credential-carrying catalog install, or make user-file references resolvable from any workspace (workspace-independent provider name) while keeping project-file references workspace-scoped. Whichever path is chosen, add a save-from-another-workspace test.
 - **Cost:** small in the UI (same scope guard as env installs); the credential-name change touches the store's provider naming and needs a migration story for existing refs.
+
+## Security docs enterprise mode still mentions update checks
+
+- **Where:** `packages/docs/content/docs/security.mdx:157` (and localized `packages/docs/content/docs/*/security.mdx`)
+- **Added:** 2026-11-18
+- **Effort:** rebrand
+- **Priority:** worth-doing
+- **Problem:** the enterprise mode section still states that "Update checks keep running, so security fixes still reach you, but they never report usage, not even the anonymous install ID", even though Phase A removed the CLI/host update check and telemetry reporting (`rebrand/03`, `rebrand/05`).
+- **Impact:** readers configuring enterprise mode are told update checks run when the fork has removed that check.
+- **Solution:** update or remove that bullet in `packages/docs/content/docs/security.mdx` and its localized translations.
+- **Cost:** small docs-only edit across the security MDX files.

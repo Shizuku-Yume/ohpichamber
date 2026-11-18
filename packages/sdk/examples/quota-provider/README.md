@@ -1,10 +1,10 @@
 # Teapot Usage
 
-An extension that adds a usage provider to OpenChamber, next to the built-in
+An extension that adds a usage provider to OhPiChamber, next to the built-in
 ones on the Usage page, in the header, in Work Status and on the phone. It
 declares `contributes.service.provides: ["quota"]` and lists in
 `contributes.quota.providers` the one OpenCode provider whose credential it
-reads, `teapot`. OpenChamber names the provider `ext-quota-provider`, draws
+reads, `teapot`. OhPiChamber names the provider `ext-quota-provider`, draws
 its card with the extension's name and icon, asks the service for usage the
 way it asks a built-in, and hands it on every read the credential OpenCode
 holds for `teapot`, and nothing else of the credential store. The approval
@@ -38,12 +38,12 @@ enabling it brings it back with its settings.
 
 ## What the service does
 
-OpenChamber posts one call, `usage.read`, to the service at `POST /quota`,
+OhPiChamber posts one call, `usage.read`, to the service at `POST /quota`,
 with `input.credentials.teapot` set to the credential OpenCode holds (an API
 key, or a browser login's tokens). The service sends the key as a bearer to
 `GET /api/usage` on the fake API and answers the usage in the shape a built-in
 computes: `usedPercent`, `windowSeconds` and `resetAt` per window, a
-`valueLabel` for the balance, and `planLabel`. OpenChamber derives the
+`valueLabel` for the balance, and `planLabel`. OhPiChamber derives the
 remaining share, the reset countdown and the formatted strings itself, so the
 card matches the built-ins field for field. A 401 from the API is answered as
 `ok: false` with the fix in `error`; an API that does not answer the same way.

@@ -99,7 +99,7 @@ const TOOL_ONE_LINE_DESCRIPTIONS = {
   openchamber: 'Execute host workspace control actions',
   openchamber_render: 'Render interactive UI components and views',
   openchamber_knowledge: 'Query project documentation and knowledge context',
-  openchamber_workflow: 'Run and manage OpenChamber workflows',
+  openchamber_workflow: 'Run and manage OhPiChamber workflows',
 } as const;
 export function getToolOneLineDescription(name: string): string {
   if (Object.hasOwn(TOOL_ONE_LINE_DESCRIPTIONS, name)) {

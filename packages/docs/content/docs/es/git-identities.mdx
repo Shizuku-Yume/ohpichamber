@@ -14,7 +14,7 @@ Una identidad de git es el nombre y el correo que llevan tus commits, y la forma
 3. Elige una **Autenticación**, es decir, cómo hace push y pull:
    - **Este equipo**: lo que ya usa Git en este equipo, como claves SSH, un gestor de credenciales o la CLI `gh`
    - **Cuenta**: la **Cuenta de control de código** que elijas, cualquier cuenta conectada en una tarjeta de host en [Integraciones](/es/integrations/), como GitHub, GitLab, Gitea, Forgejo o Gerrit. Los push van por HTTPS con el token de esa cuenta
-   - **SSH**: una clave que OpenChamber guarda para esta identidad
+   - **SSH**: una clave que OhPiChamber guarda para esta identidad
    - **Anónimo**: lee repositorios públicos por HTTPS sin iniciar sesión, y no puede hacer push
 4. Opcionalmente, dale un color y un icono para reconocerla fácilmente.
 
@@ -26,11 +26,11 @@ En Gerrit, una identidad de cuenta inicia sesión en Git con tu usuario de Gerri
 
 Elige el botón de identidad arriba del [panel Git](/es/git/) y elige una. Las pantallas de añadir y clonar ofrecen la misma elección. Una identidad que no puede llegar al repositorio sigue en la lista, desactivada y con el motivo: una cuenta de otro host, una cuenta o **Anónimo** en un remoto SSH, o una clave SSH en un remoto HTTPS.
 
-Al aplicar una identidad se escribe en la configuración **local** de git de ese repositorio, así que solo afecta a ese repo y tu ajuste global no cambia. Git en la terminal y la shell del agente también la usan. **Identidad del sistema** quita lo que escribió OpenChamber, y vuelve a responder tu propia configuración de Git.
+Al aplicar una identidad se escribe en la configuración **local** de git de ese repositorio, así que solo afecta a ese repo y tu ajuste global no cambia. Git en la terminal y la shell del agente también la usan. **Identidad del sistema** quita lo que escribió OhPiChamber, y vuelve a responder tu propia configuración de Git.
 
 ## Frases de contraseña de claves SSH
 
-Para una clave SSH cifrada, introduce su frase de contraseña opcional antes de buscar en `~/.ssh`. Después, confirma la huella y añade la clave. OpenChamber mantiene la clave cifrada y guarda la frase en el almacén de credenciales del Host. Las frases guardadas solo funcionan para acciones de Git en la aplicación. Los comandos de Git del terminal o de agentes no las recuperan, por lo que una clave administrada cifrada no puede autenticarse por esa vía.
+Para una clave SSH cifrada, introduce su frase de contraseña opcional antes de buscar en `~/.ssh`. Después, confirma la huella y añade la clave. OhPiChamber mantiene la clave cifrada y guarda la frase en el almacén de credenciales del Host. Las frases guardadas solo funcionan para acciones de Git en la aplicación. Los comandos de Git del terminal o de agentes no las recuperan, por lo que una clave administrada cifrada no puede autenticarse por esa vía.
 
 ## Relacionado
 

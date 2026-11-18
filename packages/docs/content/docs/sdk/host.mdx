@@ -1,6 +1,6 @@
 ---
 title: Host API
-description: Every connectHost method an extension can call, what OpenChamber pushes to it, the limits, and the error codes.
+description: Every connectHost method an extension can call, what OhPiChamber pushes to it, the limits, and the error codes.
 ---
 
 # Host API
@@ -13,11 +13,11 @@ import { connectHost, HostRequestError } from "ohpichamber-sdk";
 const host = connectHost();
 ```
 
-`connectHost` throws `HOST_UNAVAILABLE` when there is no `window`. Outside OpenChamber it returns a client whose every call rejects with `HOST_UNAVAILABLE`. Call `dispose()` when you tear the page down; calls still in flight reject with the same code.
+`connectHost` throws `HOST_UNAVAILABLE` when there is no `window`. Outside OhPiChamber it returns a client whose every call rejects with `HOST_UNAVAILABLE`. Call `dispose()` when you tear the page down; calls still in flight reject with the same code.
 
-## What OpenChamber pushes to you
+## What OhPiChamber pushes to you
 
-`onReady` fires with the first snapshot and again whenever OpenChamber refreshes it.
+`onReady` fires with the first snapshot and again whenever OhPiChamber refreshes it.
 
 It is not a one-time mount callback. Mount your UI and register subscriptions once; use later snapshots to update the theme and context without replacing inputs or drafts. See the guarded example in [UI kit](/sdk/ui/). Field listeners such as `onConnection` replay their current value and can receive it again with a refreshed snapshot. Compare the fields your data depends on before starting another request, and ignore responses from superseded requests.
 
@@ -65,12 +65,12 @@ Access tokens never appear here or in a `request` result.
 | `generate({ prompt, system?, maxOutputTokens? })` | one-off text from the user's Small Model. Returns `{ text }`. Needs the `model` capability. |
 | `onResolve(handler)` | register the handler for your slash commands. It gets `{ command, args }` and returns an attach item or `null`. |
 | `setBadge(count)` | mark your rail icon with a dot and put the count (0 to 999) in its tooltip, or `null` to clear it |
-| `openCommit(sha)` | open the Diff view on that commit of the current project. `sha` is 7 to 64 hex characters; OpenChamber reads the commit itself. |
-| `setHeight(px)` | set the height of your Work Status section. OpenChamber keeps it between 24 and 320 pixels; taller content scrolls inside your page. Other places ignore it. |
+| `openCommit(sha)` | open the Diff view on that commit of the current project. `sha` is 7 to 64 hex characters; OhPiChamber reads the commit itself. |
+| `setHeight(px)` | set the height of your Work Status section. OhPiChamber keeps it between 24 and 320 pixels; taller content scrolls inside your page. Other places ignore it. |
 | `onFileOpen(listener)` | file editors: get the file to edit, `{ path, name, readOnly }` plus `encoding: "text"` with `content`, or `encoding: "binary"` with `bytes`. Also makes Cmd/Ctrl+S in your page save. |
-| `onFileSnapshot(handler)` | file editors: return `{ content, version }` (or `{ bytes, version }` for a binary editor), the whole edited file. OpenChamber calls it to save and before switching to the source view or fullscreen. |
+| `onFileSnapshot(handler)` | file editors: return `{ content, version }` (or `{ bytes, version }` for a binary editor), the whole edited file. OhPiChamber calls it to save and before switching to the source view or fullscreen. |
 | `onFileSaved(listener)` | file editors: the snapshot with that `version` is on disk. Answer with `reportFileChange`. |
-| `reportFileChange({ dirty, edited })` | file editors: tell OpenChamber whether there are unsaved changes and whether the document just changed |
+| `reportFileChange({ dirty, edited })` | file editors: tell OhPiChamber whether there are unsaved changes and whether the document just changed |
 | `requestFileSave()` | file editors: save now, as Cmd/Ctrl+S does |
 | `reportFileUnsupported()` | file editors: this file can't be opened here, show its source instead |
 
@@ -108,7 +108,7 @@ await host.startSession({
 });
 ```
 
-`providerId` is your panel id; OpenChamber overwrites it with your id anyway. `id` is your own identifier for the item. `kind` is `issue` (default) or `pull`. `text` is optional context for the model, 1 to 16000 characters after trim. `data` is optional JSON of your own (status, comments, anything), up to 16000 characters when serialized. OpenChamber stores it with the chip and hands it back unchanged in `ctx.item` when the user clicks the chip; it never reaches the model.
+`providerId` is your panel id; OhPiChamber overwrites it with your id anyway. `id` is your own identifier for the item. `kind` is `issue` (default) or `pull`. `text` is optional context for the model, 1 to 16000 characters after trim. `data` is optional JSON of your own (status, comments, anything), up to 16000 characters when serialized. OhPiChamber stores it with the chip and hands it back unchanged in `ctx.item` when the user clicks the chip; it never reaches the model.
 
 `startSession` accepts `projectId` without switching the current project. Omit `worktree` for the target directory, use `true` for a generated worktree, `{ kind: "existing", directory }` for a known worktree, or `{ kind: "new", name?, baseBranch? }` for a named new one. The name sets both branch and worktree. `navigation` defaults to `"preserve"`; use `"open"` to select the new chat. The first-message model, agent, and variant are captured when creation starts.
 
@@ -168,7 +168,7 @@ Session `activity` is `unknown`, `idle`, `running`, `retrying`, `waiting-permiss
 
 ## Background shells
 
-With the `shells` capability, watch the shell commands running in the background, scoped to a session and its subagents, a registered project, or every session. OpenChamber answers from its local store; no network read happens.
+With the `shells` capability, watch the shell commands running in the background, scoped to a session and its subagents, a registered project, or every session. OhPiChamber answers from its local store; no network read happens.
 
 | Call | What it does |
 | --- | --- |
@@ -178,9 +178,9 @@ With the `shells` capability, watch the shell commands running in the background
 
 The snapshot is `{ kind: "shells", scope, shells, ended }`, with `scope` echoing the subscription's scope. Each running shell is `{ id, sessionID, command, startedAt, background }`, at most 200, oldest first. `background` is `true` for a job the turn does not wait for.
 
-`ended` lists the commands OpenChamber saw end, oldest end first, at most 200 with the newest kept. Each one adds `status`, `endedAt`, and `exit` when the command exited with a code. The status is `exited`, `timeout`, `killed` by a signal, `stopped` by a user, or `unknown` when the end happened during a reconnect. OpenChamber keeps this list in memory only. It is empty after the app reloads, so save what your panel shows in extension storage.
+`ended` lists the commands OhPiChamber saw end, oldest end first, at most 200 with the newest kept. Each one adds `status`, `endedAt`, and `exit` when the command exited with a code. The status is `exited`, `timeout`, `killed` by a signal, `stopped` by a user, or `unknown` when the end happened during a reconnect. OhPiChamber keeps this list in memory only. It is empty after the app reloads, so save what your panel shows in extension storage.
 
-The host keeps an ended command's output for its latest 25 ended commands per directory. A stopped command loses its output right away. Reading a shell OpenChamber never saw, or output the host no longer has, is `NOT_FOUND`. So is stopping a shell that is not running. An unapproved `shells` capability is `NOT_GRANTED`.
+The host keeps an ended command's output for its latest 25 ended commands per directory. A stopped command loses its output right away. Reading a shell OhPiChamber never saw, or output the host no longer has, is `NOT_FOUND`. So is stopping a shell that is not running. An unapproved `shells` capability is `NOT_GRANTED`.
 
 ## Persistent extension data
 
@@ -199,9 +199,9 @@ No extra permission is needed. Storage belongs to this extension on the connecte
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path` starts with `/` and has no scheme or host; OpenChamber joins it to the `apiOrigin` from your manifest and adds the `Authorization` header. Token integrations send the pasted token as is, as `Bearer <token>` when the manifest sets `token.scheme: "bearer"`, or as `Basic base64(username:token)` when it sets `"basic"`. OAuth and Linear integrations always send `Bearer`. The result is `{ status, body }`. The body is text; parse JSON yourself.
+`path` starts with `/` and has no scheme or host; OhPiChamber joins it to the `apiOrigin` from your manifest and adds the `Authorization` header. Token integrations send the pasted token as is, as `Bearer <token>` when the manifest sets `token.scheme: "bearer"`, or as `Basic base64(username:token)` when it sets `"basic"`. OAuth and Linear integrations always send `Bearer`. The result is `{ status, body }`. The body is text; parse JSON yourself.
 
-A Linear integration may also `GET /api/linear/issues/get`, which OpenChamber answers from its own Linear route.
+A Linear integration may also `GET /api/linear/issues/get`, which OhPiChamber answers from its own Linear route.
 
 No answer within 20 seconds is `HOST_TIMEOUT`.
 
@@ -217,7 +217,7 @@ try {
 
 ## serviceRequest
 
-When the manifest declares `contributes.service`, OpenChamber starts that process and your page talks to it through the same kind of call. The page never opens the socket itself.
+When the manifest declares `contributes.service`, OhPiChamber starts that process and your page talks to it through the same kind of call. The page never opens the socket itself.
 
 ```ts
 const status = await host.serviceStatus();
@@ -228,7 +228,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 ## Session events
 
-Your page only knows about a session while it is open. Your service can know more: declare `contributes.sessionEvents` next to `contributes.service`, and OpenChamber posts the events you list to the service, from every project, whether or not a window is open.
+Your page only knows about a session while it is open. Your service can know more: declare `contributes.sessionEvents` next to `contributes.service`, and OhPiChamber posts the events you list to the service, from every project, whether or not a window is open.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host" },
@@ -254,9 +254,9 @@ if (url.pathname === SESSION_EVENTS_PATH) {
 }
 ```
 
-Every project's events are sent; compare `event.project.directory` with your own settings and answer `{ "ok": true }` for the rest. Delivery is at most once and in order, one request at a time; a failed answer drops your events for 30 seconds, and nothing is replayed after OpenChamber or your service was down. The service needs no panel for this. The `session-events-log` example journals every event to a file.
+Every project's events are sent; compare `event.project.directory` with your own settings and answer `{ "ok": true }` for the rest. Delivery is at most once and in order, one request at a time; a failed answer drops your events for 30 seconds, and nothing is replayed after OhPiChamber or your service was down. The service needs no panel for this. The `session-events-log` example journals every event to a file.
 
-## Calling OpenChamber from your service
+## Calling OhPiChamber from your service
 
 A service can act with no window open. `createServiceHost` is its way back:
 
@@ -281,7 +281,7 @@ To carry the agent's requests somewhere else, such as a chat app, add `answers: 
 
 ## Running with nobody asking
 
-A service starts on the first request, and a role's service stops when idle. `service.keepRunning: true` starts it with OpenChamber and brings it back when it stops. `service.schedule` wakes it on a clock:
+A service starts on the first request, and a role's service stops when idle. `service.keepRunning: true` starts it with OhPiChamber and brings it back when it stops. `service.schedule` wakes it on a clock:
 
 ```json
 "service": {
@@ -292,7 +292,7 @@ A service starts on the first request, and a role's service stops when idle. `se
 }
 ```
 
-A run is one `POST /schedule`. Read it with `readServiceScheduleRequest` and answer 200. A run missed while OpenChamber was down is gone. A service that needs outside events holds its own connection or polls.
+A run is one `POST /schedule`. Read it with `readServiceScheduleRequest` and answer 200. A run missed while OhPiChamber was down is gone. A service that needs outside events holds its own connection or polls.
 
 ## Rows in the @ menu
 
@@ -321,7 +321,7 @@ host.onBlock(({ args, answered }) => draw(args.key, answered));
 button.onclick = () => host.answerBlock('Close this ticket');
 ```
 
-Set `"answers": true` on a component that does this. Agents are told to ask with it instead of the built-in choice when its description fits, and a page that waits for an answer leaves out its Send button. Under such a block OpenChamber offers the same note field as its own forms: the agent reads the note with your answer, and a note on its own is an answer too.
+Set `"answers": true` on a component that does this. Agents are told to ask with it instead of the built-in choice when its description fits, and a page that waits for an answer leaves out its Send button. Under such a block OhPiChamber offers the same note field as its own forms: the agent reads the note with your answer, and a note on its own is an answer too.
 
 The arguments are written by a model, so text from a web page or a ticket can steer them. Treat them as untrusted, and do nothing with side effects until the user clicks.
 
@@ -338,9 +338,9 @@ A service can deliver the user's notifications, next to the desktop and the phon
 }
 ```
 
-OpenChamber draws an account card for the channel in Settings → Integrations from that description, and keeps the account: the user connects it there, the token stays in OpenChamber, and your service never sees it. Once an account is connected, every notification OpenChamber would send to the phone goes to your service too, after the user's own notification toggles, and only while no window is visible unless the user chose to be notified always. Pausing the extension stops it.
+OhPiChamber draws an account card for the channel in Settings → Integrations from that description, and keeps the account: the user connects it there, the token stays in OhPiChamber, and your service never sees it. Once an account is connected, every notification OhPiChamber would send to the phone goes to your service too, after the user's own notification toggles, and only while no window is visible unless the user chose to be notified always. Pausing the extension stops it.
 
-OpenChamber forwards three calls to `POST /notifications`: `auth.probe` (is this server one you deliver to), `auth.verify` (who does this token belong to) and `notify` (one notification). Read each with `readNotificationsProviderRequest`, and reach the channel's server only through the outbound helper, which posts your request to OpenChamber with the call's handle; OpenChamber adds the token and keeps the request on the account's server.
+OhPiChamber forwards three calls to `POST /notifications`: `auth.probe` (is this server one you deliver to), `auth.verify` (who does this token belong to) and `notify` (one notification). Read each with `readNotificationsProviderRequest`, and reach the channel's server only through the outbound helper, which posts your request to OhPiChamber with the call's handle; OhPiChamber adds the token and keeps the request on the account's server.
 
 ```ts
 import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
@@ -368,7 +368,7 @@ Which room or channel a project goes to is your extension's own choice: the noti
 
 ## Trackers
 
-A service can be a work item tracker next to Linear: declare `provides: ["tracker"]` and describe the tracker in `contributes.tracker`. OpenChamber then lists it beside Linear everywhere trackers appear, from the manifest alone, before the service ever runs.
+A service can be a work item tracker next to Linear: declare `provides: ["tracker"]` and describe the tracker in `contributes.tracker`. OhPiChamber then lists it beside Linear everywhere trackers appear, from the manifest alone, before the service ever runs.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["tracker"] },
@@ -384,9 +384,9 @@ A service can be a work item tracker next to Linear: declare `provides: ["tracke
 }
 ```
 
-The user connects accounts on the tracker's card under Extension accounts: a token, or a browser sign-in when you declare `auth.oauth` (OpenChamber runs the sign-in with the client id the user enters and keeps the tokens). Your service never sees a credential. `urls.item` are templates for an item's address, with `{id}` for the identifier (also as `?name={id}` when it travels in the query); OpenChamber compiles them so pasted links become linked items. `identifier` says what the key looks like: `key-number` (`PROJ-42`), `number`, or `short-code`.
+The user connects accounts on the tracker's card under Extension accounts: a token, or a browser sign-in when you declare `auth.oauth` (OhPiChamber runs the sign-in with the client id the user enters and keeps the tokens). Your service never sees a credential. `urls.item` are templates for an item's address, with `{id}` for the identifier (also as `?name={id}` when it travels in the query); OhPiChamber compiles them so pasted links become linked items. `identifier` says what the key looks like: `key-number` (`PROJ-42`), `number`, or `short-code`.
 
-OpenChamber forwards nine calls to `POST /tracker`: `auth.probe` and `auth.verify`, the reads `items.list`, `items.get`, `items.liveSummaries`, `states.list` and `containers.list`, and the writes `items.updateState` and `comments.create`. Read each with `readTrackerProviderRequest`, answer in the neutral item shapes, and reach the tracker's server only through the outbound helper, which posts your request to OpenChamber with the call's handle; OpenChamber adds the credential and keeps the request on the account's server. A read's handle sends `GET` only.
+OhPiChamber forwards nine calls to `POST /tracker`: `auth.probe` and `auth.verify`, the reads `items.list`, `items.get`, `items.liveSummaries`, `states.list` and `containers.list`, and the writes `items.updateState` and `comments.create`. Read each with `readTrackerProviderRequest`, answer in the neutral item shapes, and reach the tracker's server only through the outbound helper, which posts your request to OhPiChamber with the call's handle; OhPiChamber adds the credential and keeps the request on the account's server. A read's handle sends `GET` only.
 
 ```ts
 import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
@@ -406,20 +406,20 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 }
 ```
 
-When the user turns session comments on, OpenChamber calls `comments.create` with "session started", "completed" or "failed" and a link to the session, once each; the comment carries nothing else. The `tracker-provider` example is a complete tracker with a fake server to try it against.
+When the user turns session comments on, OhPiChamber calls `comments.create` with "session started", "completed" or "failed" and a link to the session, once each; the comment carries nothing else. The `tracker-provider` example is a complete tracker with a fake server to try it against.
 
 ## Usage providers
 
-A service can report usage next to the built-in providers: declare `provides: ["quota"]` and list in `contributes.quota.providers` the OpenCode providers whose credentials it needs. OpenChamber names the provider `ext-<panel.id>`, draws its card with the extension's name and icon, and asks it the way it asks a built-in.
+A service can report usage next to the built-in providers: declare `provides: ["quota"]` and list in `contributes.quota.providers` the OpenCode providers whose credentials it needs. OhPiChamber names the provider `ext-<panel.id>`, draws its card with the extension's name and icon, and asks it the way it asks a built-in.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-The approval dialog lists those providers, and a version that changes the list asks again. On every refresh OpenChamber posts one call, `usage.read`, to `POST /quota`, with `input.credentials` holding the credential OpenCode stores for each listed provider it has one for (an API key, or a browser login's tokens) and nothing else of the store. A listed provider OpenCode holds no credential for is shown as not configured and the service is not called; an empty list is allowed, for a provider whose key lives in the extension's own settings.
+The approval dialog lists those providers, and a version that changes the list asks again. On every refresh OhPiChamber posts one call, `usage.read`, to `POST /quota`, with `input.credentials` holding the credential OpenCode stores for each listed provider it has one for (an API key, or a browser login's tokens) and nothing else of the store. A listed provider OpenCode holds no credential for is shown as not configured and the service is not called; an empty list is allowed, for a provider whose key lives in the extension's own settings.
 
-Read the body with `readQuotaProviderRequest` and answer `{ ok: true, data }` with the result a built-in computes: `ok`, `configured`, `error`, `planLabel`, and `usage.windows` keyed by window name, each with `usedPercent`, `windowSeconds`, `resetAt` (epoch milliseconds) and an optional `valueLabel` or `value`, plus `usage.models` for per-model windows. OpenChamber derives the remaining share, the reset countdown and the formatted strings, so the card matches a built-in's.
+Read the body with `readQuotaProviderRequest` and answer `{ ok: true, data }` with the result a built-in computes: `ok`, `configured`, `error`, `planLabel`, and `usage.windows` keyed by window name, each with `usedPercent`, `windowSeconds`, `resetAt` (epoch milliseconds) and an optional `valueLabel` or `value`, plus `usage.models` for per-model windows. OhPiChamber derives the remaining share, the reset countdown and the formatted strings, so the card matches a built-in's.
 
 ```ts
 import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
@@ -476,9 +476,9 @@ Failed calls throw `HostRequestError`. `code` is one of these; `message` says mo
 
 | Code | When |
 | --- | --- |
-| `HOST_UNAVAILABLE` | no window, not inside OpenChamber, or `dispose()` ran |
+| `HOST_UNAVAILABLE` | no window, not inside OhPiChamber, or `dispose()` ran |
 | `HOST_TIMEOUT` | no answer for 20 seconds |
-| `HOST_REJECTED` | OpenChamber refused, or answered with a code this SDK does not know |
+| `HOST_REJECTED` | OhPiChamber refused, or answered with a code this SDK does not know |
 | `DISCONNECTED` | no token or Linear connection for your integration |
 | `BAD_PATH` | `path` was malformed or tried to leave the allowed origin |
 | `NO_INTEGRATION` | the manifest has no `integration` |
@@ -494,7 +494,7 @@ Failed calls throw `HostRequestError`. `code` is one of these; `message` says mo
 | `DENIED` | the operating system refused the file operation |
 | `NO_MODEL` | `generate` with no Small Model available |
 | `MODEL_FAILED` | the Small Model returned an error |
-| `UNSUPPORTED` | this OpenChamber cannot do the call, for example `openCommit` where there is no Diff view, or `openSurface` for a screen that cannot open there |
+| `UNSUPPORTED` | this OhPiChamber cannot do the call, for example `openCommit` where there is no Diff view, or `openSurface` for a screen that cannot open there |
 
 ## Related
 

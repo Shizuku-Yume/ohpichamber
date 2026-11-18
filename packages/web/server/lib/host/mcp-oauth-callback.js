@@ -40,7 +40,7 @@ export const renderMcpOAuthCallbackPage = ({ title, message }) => `<!doctype htm
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} — OpenChamber</title>
+<title>${escapeHtml(title)} — OhPiChamber</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -143,7 +143,7 @@ export const completeMcpOAuthCallback = async ({ service, pendingFlows, query, c
   return {
    status: 400,
    title: 'Sign-in link is invalid',
-   message: 'This sign-in link is unknown, has expired, or was already used. Start the sign-in again from OpenChamber.',
+   message: 'This sign-in link is unknown, has expired, or was already used. Start the sign-in again from OhPiChamber.',
   };
  }
  const providerError = queryValue(query, 'error');
@@ -152,7 +152,7 @@ export const completeMcpOAuthCallback = async ({ service, pendingFlows, query, c
   return { status: 400, title: 'Sign-in was not completed', message: 'The provider did not return an authorization code.' };
  }
  if (service.getState().phase !== 'ready') {
-  return { status: 503, title: 'Sign-in could not finish', message: 'The Agent Service is not running. Start OpenChamber again and retry the sign-in.' };
+  return { status: 503, title: 'Sign-in could not finish', message: 'The Agent Service is not running. Start OhPiChamber again and retry the sign-in.' };
  }
  const body = {
   action: 'complete',
@@ -186,15 +186,15 @@ export const completeMcpOAuthCallback = async ({ service, pendingFlows, query, c
    return { status: 502, title: 'Sign-in could not finish', message: 'The Agent Service returned an unexpected answer.' };
   }
   if (result.data.status === 'authenticated') {
-   return { status: 200, title: 'Sign-in complete', message: 'You can close this tab and return to OpenChamber.' };
+   return { status: 200, title: 'Sign-in complete', message: 'You can close this tab and return to OhPiChamber.' };
   }
   const detail = result.data.status === 'unauthenticated' ? result.data.error?.detail : undefined;
   return {
    status: 400,
    title: 'Sign-in was not completed',
-   message: boundedDetail(detail) ?? 'The provider rejected the sign-in. Start it again from OpenChamber.',
+   message: boundedDetail(detail) ?? 'The provider rejected the sign-in. Start it again from OhPiChamber.',
   };
  } catch {
-  return { status: 502, title: 'Sign-in could not finish', message: 'The Agent Service could not be reached. Start OpenChamber again and retry the sign-in.' };
+  return { status: 502, title: 'Sign-in could not finish', message: 'The Agent Service could not be reached. Start OhPiChamber again and retry the sign-in.' };
  }
 };

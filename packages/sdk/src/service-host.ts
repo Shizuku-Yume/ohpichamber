@@ -219,7 +219,7 @@ export const createServiceHost = ({ env }: { env: ServiceHostEnv }): ServiceHost
   const call = async <M extends ServiceHostMethod>(method: M, input: ServiceHostCalls[M]['input']): Promise<ServiceHostCalls[M]['result']> => {
     const base = env[OPENCHAMBER_HOST_CALLBACK_URL_ENV];
     const token = env.OPENCHAMBER_SERVICE_TOKEN;
-    if (!base || !token) throw new ServiceHostError('This service was not started by OpenChamber.', 'HOST_UNAVAILABLE', 0);
+    if (!base || !token) throw new ServiceHostError('This service was not started by OhPiChamber.', 'HOST_UNAVAILABLE', 0);
     let response: Response;
     try {
       response = await fetch(`${base.replace(/\/+$/, '')}${SERVICE_HOST_PATH}`, {
@@ -229,12 +229,12 @@ export const createServiceHost = ({ env }: { env: ServiceHostEnv }): ServiceHost
         signal: AbortSignal.timeout(SERVICE_HOST_TIMEOUT_MS),
       });
     } catch {
-      throw new ServiceHostError('OpenChamber did not answer.', 'HOST_UNAVAILABLE', 0);
+      throw new ServiceHostError('OhPiChamber did not answer.', 'HOST_UNAVAILABLE', 0);
     }
     const body: { result?: ServiceHostCalls[M]['result']; error?: { message?: string; code?: string } } | null = await response.json().catch(() => null);
     if (response.ok && body?.result !== undefined) return body.result;
     throw new ServiceHostError(
-      body?.error?.message ?? `OpenChamber answered HTTP ${response.status}.`,
+      body?.error?.message ?? `OhPiChamber answered HTTP ${response.status}.`,
       body?.error?.code ?? 'HOST_UNAVAILABLE',
       response.status,
     );

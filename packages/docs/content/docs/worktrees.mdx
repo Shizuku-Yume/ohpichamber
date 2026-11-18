@@ -17,9 +17,9 @@ A worktree session runs in its own checked-out copy of your repo, on its own bra
 3. Check **Based on** (the branch a new one starts from, by default the remote's default branch, such as `origin/main`) and **Folder name**; change them only if you need to.
 4. Create it. If the project has setup commands, they run right after.
 
-OpenChamber makes the branch, sets up the folder, and opens a new session there, ready for your first message. You can also kick one off straight from a [todo](/notes-todos-plans/) or an [issue or pull request](/github/).
+OhPiChamber makes the branch, sets up the folder, and opens a new session there, ready for your first message. You can also kick one off straight from a [todo](/notes-todos-plans/) or an [issue or pull request](/github/).
 
-To skip the questions, pick **Quick worktree** in the same branch menu: OpenChamber gives the branch a placeholder name and points the new session at it. Once the agent names the task, it renames the branch after it too, such as `fix/login-timeout`, as long as the branch hasn't been pushed yet.
+To skip the questions, pick **Quick worktree** in the same branch menu: OhPiChamber gives the branch a placeholder name and points the new session at it. Once the agent names the task, it renames the branch after it too, such as `fix/login-timeout`, as long as the branch hasn't been pushed yet.
 
 ## In the sidebar
 
@@ -27,7 +27,7 @@ A worktree is one row in the sidebar, with every session in it underneath. Under
 
 ## Projects opened on a folder of the repository
 
-If you open a project on a folder inside a repository, such as `repo/ai`, new worktrees open there too. A session in a new worktree starts in the same folder of the checkout, so the agent finds the config that lives in it. A project opened on the repository root starts at the worktree root, as before. When a branch has no such folder, the session starts in the worktree root and OpenChamber tells you.
+If you open a project on a folder inside a repository, such as `repo/ai`, new worktrees open there too. A session in a new worktree starts in the same folder of the checkout, so the agent finds the config that lives in it. A project opened on the repository root starts at the worktree root, as before. When a branch has no such folder, the session starts in the worktree root and OhPiChamber tells you.
 
 ## Bring the work back
 
@@ -35,7 +35,7 @@ When the work is good, use **Integrate** in the Git view to bring the worktree's
 
 ## Clean up
 
-When the task is finished, pick **Archive worktree** in the row's menu, or hold Shift and click the archive button that takes the place of the new-session button on the row. OpenChamber archives it: the folder goes, and its sessions, its uncommitted changes and its branch wait on the Archive page. If a session there is still running, the worktree stays.
+When the task is finished, pick **Archive worktree** in the row's menu, or hold Shift and click the archive button that takes the place of the new-session button on the row. OhPiChamber archives it: the folder goes, and its sessions, its uncommitted changes and its branch wait on the Archive page. If a session there is still running, the worktree stays.
 
 Marking the row done only takes it out of In work. To archive a worktree whenever you mark it done, or once its PR is merged, turn that on in **Settings → Sessions → Finished worktrees**.
 
@@ -56,13 +56,13 @@ To remove a worktree permanently:
 - **From active sidebar:** Pick **Delete** in the worktree row menu.
 - **From Archive page:** Click **Delete** on an archived worktree row.
 - **Branch deletion defaults to keep:** Deleting an archived worktree defaults to preserving the Git branch and its commit history. The delete confirmation dialog provides an explicit **Also delete the local branch** checkbox, which is unchecked by default.
-- **Legacy unbound Git-only archives:** Older snapshot refs that lack Host-owned session state bindings permit Git-only recovery. OpenChamber warns explicitly that associated sessions will not be moved, unarchived, or deleted. Deleting an unbound archive requires explicit confirmation for unverified branch deletion.
+- **Legacy unbound Git-only archives:** Older snapshot refs that lack Host-owned session state bindings permit Git-only recovery. OhPiChamber warns explicitly that associated sessions will not be moved, unarchived, or deleted. Deleting an unbound archive requires explicit confirmation for unverified branch deletion.
 
 ## If something looks off
 
-A worktree can need attention if its folder went missing, its branch is in a detached state, or a merge or rebase is half-finished. OpenChamber flags these so you can fix them — see [Worktrees & Git](/troubleshooting/worktrees-git/).
+A worktree can need attention if its folder went missing, its branch is in a detached state, or a merge or rebase is half-finished. OhPiChamber flags these so you can fix them — see [Worktrees & Git](/troubleshooting/worktrees-git/).
 
 ## Related
 
 - [Multi-run](/multi-run/) — launch many worktree sessions at once
-- [Git Workflows](/git/) — commit and integrate from inside OpenChamber
+- [Git Workflows](/git/) — commit and integrate from inside OhPiChamber

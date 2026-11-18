@@ -251,7 +251,7 @@ export const createPageAnswers = ({ onWaitChange = () => { } } = {}) => {
  */
 export const createRenderPageAction = ({ isEnabled, pageAnswers, hasUnreadChat = async () => false }) => async (input, { sessionId, callId, directory, signal } = {}) => {
   if (!await isEnabled()) {
-    throw new OpenChamberControlError('The render tool is turned off in OpenChamber settings', 403);
+    throw new OpenChamberControlError('The render tool is turned off in OhPiChamber settings', 403);
   }
   // A page is an HTML document or a ui program in the UI block language; the
   // chat draws the program with its own components (packages/ui

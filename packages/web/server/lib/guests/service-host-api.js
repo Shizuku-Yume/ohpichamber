@@ -19,7 +19,7 @@ const ok = (result) => ({ status: 200, body: { result } });
 const controlFailure = (error) => {
   const status = Number.isInteger(error?.statusCode) ? error.statusCode : 500;
   if (status >= 500) console.warn('[service-host] a session call failed:', error?.message ?? error);
-  return fail(status, 'SESSION_FAILED', status >= 500 ? 'OpenChamber could not reach the session.' : String(error?.message ?? 'The call was refused.'));
+  return fail(status, 'SESSION_FAILED', status >= 500 ? 'OhPiChamber could not reach the session.' : String(error?.message ?? 'The call was refused.'));
 };
 
 /** A service names a session only; a read goes to the folder the session lives in. */

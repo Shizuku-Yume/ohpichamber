@@ -1,24 +1,24 @@
 ---
 title: Tunnels
-description: Expose OpenChamber safely for remote and mobile access.
+description: Expose OhPiChamber safely for remote and mobile access.
 ---
 
 # Tunnels
 
-A tunnel is a link to your OpenChamber, so you can reach it from an ordinary browser on another network or, with Tailscale Serve, from any device in your tailnet. Use `ohpichamber tunnel` to create one for a running instance.
+A tunnel is a link to your OhPiChamber, so you can reach it from an ordinary browser on another network or, with Tailscale Serve, from any device in your tailnet. Use `ohpichamber tunnel` to create one for a running instance.
 
 > Connecting your **own devices** (the mobile app, another desktop) usually doesn't need a tunnel — [pair them](/connect-devices/) instead and let the end-to-end encrypted [Private Relay](/private-relay/) handle away-from-home access with zero setup.
 
 ## Prerequisites
 
-OpenChamber starts the tunnel provider CLI on your machine. Install the provider you want to use first:
+OhPiChamber starts the tunnel provider CLI on your machine. Install the provider you want to use first:
 
 ```bash
 brew install cloudflared
 brew install ngrok
 ```
 
-For Tailscale, install the [Tailscale app](https://tailscale.com/download) and sign in. On a Mac the app is enough: OpenChamber finds its command-line tool inside the app.
+For Tailscale, install the [Tailscale app](https://tailscale.com/download) and sign in. On a Mac the app is enough: OhPiChamber finds its command-line tool inside the app.
 
 Cloudflare quick tunnels can run with `cloudflared`. Ngrok requires an ngrok account and an authtoken from the ngrok dashboard:
 
@@ -28,10 +28,10 @@ ngrok config add-authtoken <your-ngrok-token>
 
 ## Quick start
 
-1. Start OpenChamber:
+1. Start OhPiChamber:
 
 ```bash
-openchamber
+ohpichamber
 ```
 
 If you skip this step, `ohpichamber tunnel start` can auto-start a CLI server. When auto-starting, you can pass server options such as `--port`, `--host`, `--lan`, `--ui-password`, and `--api-only`.
@@ -60,9 +60,9 @@ ohpichamber tunnel start --provider tailscale --mode serve
 ohpichamber tunnel status
 ```
 
-When the tunnel is up, `status` shows a public URL. Open it, or scan the QR code, to reach OpenChamber from anywhere.
+When the tunnel is up, `status` shows a public URL. Open it, or scan the QR code, to reach OhPiChamber from anywhere.
 
-By default, OpenChamber prints a QR code in interactive TTY sessions. Use `--qr` to force QR output, or `--no-qr` to disable it.
+By default, OhPiChamber prints a QR code in interactive TTY sessions. Use `--qr` to force QR output, or `--no-qr` to disable it.
 
 ## Providers
 
@@ -74,9 +74,9 @@ By default, OpenChamber prints a QR code in interactive TTY sessions. Use `--qr`
 
 Both modes use your machine's tailnet address, such as `https://laptop.example.ts.net`. Pick its port with `--https-port`: 443 (the default), 8443 or 10000. Change it when Tailscale already shares something else on 443.
 
-The first time, Tailscale asks you to turn on HTTPS (for Serve) or Funnel for your tailnet. OpenChamber stops and shows Tailscale's link: open it, approve, and start the tunnel again. On Linux, Tailscale lets only root or its operator share ports; make yourself the operator once with `sudo tailscale set --operator=$USER`.
+The first time, Tailscale asks you to turn on HTTPS (for Serve) or Funnel for your tailnet. OhPiChamber stops and shows Tailscale's link: open it, approve, and start the tunnel again. On Linux, Tailscale lets only root or its operator share ports; make yourself the operator once with `sudo tailscale set --operator=$USER`.
 
-Stopping the tunnel removes what OpenChamber shared through Tailscale and leaves the rest of your Tailscale setup alone.
+Stopping the tunnel removes what OhPiChamber shared through Tailscale and leaves the rest of your Tailscale setup alone.
 
 ## Managed modes
 
@@ -124,7 +124,7 @@ ohpichamber tunnel stop --port 3000
 
 ## Behavior notes
 
-- one active tunnel per OpenChamber instance (port)
+- one active tunnel per OhPiChamber instance (port)
 - starting a new mode/provider on same instance replaces previous tunnel
 - generating a new connect link revokes previous unused one
 - tunnel auto-start preserves server flags like `--ui-password` and `--api-only` in the instance settings used by restart/update flows
@@ -134,5 +134,5 @@ ohpichamber tunnel stop --port 3000
 - [Connect a Device](/connect-devices/) — pair your own devices without a public URL
 - [Security](/security/) — protect the UI before exposing it
 - [Desktop Tunnels](/desktop-tunnels/) — desktop app tunnel setup without CLI startup
-- [PWA & Mobile](/mobile/) — reach OpenChamber from your phone
+- [PWA & Mobile](/mobile/) — reach OhPiChamber from your phone
 - [Troubleshooting](/troubleshooting/) — if the tunnel link doesn't work

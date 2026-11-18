@@ -1,11 +1,11 @@
 ---
 title: Zestaw UI
-description: Przyciski, pola, listy rozwijane, zakładki, listy i inne gotowe elementy z ohpichamber-sdk/ui, dzięki którym rozszerzenie wygląda jak reszta OpenChamber.
+description: Przyciski, pola, listy rozwijane, zakładki, listy i inne gotowe elementy z ohpichamber-sdk/ui, dzięki którym rozszerzenie wygląda jak reszta OhPiChamber.
 ---
 
 # Zestaw UI
 
-`ohpichamber-sdk/ui` to zestaw gotowych kontrolek, które używają kolorów, czcionek i odstępów aplikacji, więc Twoje rozszerzenie wygląda jak reszta OpenChamber bez kopiowania jej styli. Każda kontrolka to funkcja: dajesz jej swój element i ustawienia, ona rysuje się w nim i zwraca `{ update, dispose }`. Ty składasz kontrolki w ekran i trzymasz dane. Zestaw nigdy nie wywołuje Twojego dostawcy ani OpenChamber; `host.request`, `host.attach` i resztę nadal wywołujesz samodzielnie. Własny HTML i CSS możesz napisać dla wszystkiego, czego w zestawie brakuje, ale najpierw sięgaj po zestaw: jego kontrolki same podążają za motywem, odstępami i nawykami klawiaturowymi użytkownika, więc zbudowany z nich panel wygląda jak część OpenChamber, a nie strona internetowa w środku.
+`ohpichamber-sdk/ui` to zestaw gotowych kontrolek, które używają kolorów, czcionek i odstępów aplikacji, więc Twoje rozszerzenie wygląda jak reszta OhPiChamber bez kopiowania jej styli. Każda kontrolka to funkcja: dajesz jej swój element i ustawienia, ona rysuje się w nim i zwraca `{ update, dispose }`. Ty składasz kontrolki w ekran i trzymasz dane. Zestaw nigdy nie wywołuje Twojego dostawcy ani OhPiChamber; `host.request`, `host.attach` i resztę nadal wywołujesz samodzielnie. Własny HTML i CSS możesz napisać dla wszystkiego, czego w zestawie brakuje, ale najpierw sięgaj po zestaw: jego kontrolki same podążają za motywem, odstępami i nawykami klawiaturowymi użytkownika, więc zbudowany z nich panel wygląda jak część OhPiChamber, a nie strona internetowa w środku.
 
 ## Najpierw wywołaj `applyHostReady`
 
@@ -29,9 +29,9 @@ Do własnego CSS `applyHostReady` udostępnia `--primary-text`, `--success-text`
 
 `onReady` może uruchamiać się wielokrotnie, gdy panel jest otwarty, na przykład po zmianie kontekstu sesji. Stosuj motyw za każdym razem, ale montuj kontrolki i rejestruj listenery tylko raz. Przechowuj szkice poza funkcjami renderującymi. Przy zmianie zakładki ukrywaj istniejące panele lub odtwarzaj ich wartości ze stanu.
 
-## Co zmienia się po aktualizacji OpenChamber
+## Co zmienia się po aktualizacji OhPiChamber
 
-Kolory, obramowania, zaokrąglenia rogów oraz stany najechania, zaznaczenia i fokusu kontrolek zestawu pochodzą z wersji OpenChamber, w której działa rozszerzenie, więc po aktualizacji podążają za aplikacją bez przebudowy. Rozmiary i odstępy zostają takie, z jakimi zbudowano paczkę, więc układ się nie przesuwa; zmieniają się, gdy przebudujesz rozszerzenie z nowszym SDK. OpenChamber dodaje swoje style po twoim dokumencie, więc żeby zmienić wygląd kontrolki zestawu, użyj selektora bardziej szczegółowego niż selektor zestawu, na przykład `#root .oc-sdk-btn`.
+Kolory, obramowania, zaokrąglenia rogów oraz stany najechania, zaznaczenia i fokusu kontrolek zestawu pochodzą z wersji OhPiChamber, w której działa rozszerzenie, więc po aktualizacji podążają za aplikacją bez przebudowy. Rozmiary i odstępy zostają takie, z jakimi zbudowano paczkę, więc układ się nie przesuwa; zmieniają się, gdy przebudujesz rozszerzenie z nowszym SDK. OhPiChamber dodaje swoje style po twoim dokumencie, więc żeby zmienić wygląd kontrolki zestawu, użyj selektora bardziej szczegółowego niż selektor zestawu, na przykład `#root .oc-sdk-btn`.
 
 ## Synchronizacja wyboru i pól
 
@@ -142,7 +142,7 @@ host.onReady((ctx) => {
 
 ## Linki w tekście od dostawcy
 
-Twoja strona działa w sandboxie i nie może sama otworzyć nowej karty. Gdy używasz `mountText`, przekaż `onOpenUrl` i oddaj link OpenChamber:
+Twoja strona działa w sandboxie i nie może sama otworzyć nowej karty. Gdy używasz `mountText`, przekaż `onOpenUrl` i oddaj link OhPiChamber:
 
 ```ts
 import { mountText } from "ohpichamber-sdk/ui";

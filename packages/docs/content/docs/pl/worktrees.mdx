@@ -17,9 +17,9 @@ Sesja worktree działa we własnej wyewidencjonowanej kopii Twojego repozytorium
 3. Sprawdź **Based on** (gałąź, od której startuje nowa, domyślnie domyślna gałąź zdalnego repozytorium, np. `origin/main`) i **Folder name**; zmieniaj je tylko wtedy, gdy trzeba.
 4. Utwórz go. Jeśli projekt ma polecenia konfiguracyjne, uruchamiają się zaraz potem.
 
-OpenChamber tworzy gałąź, konfiguruje folder i otwiera w nim nową sesję, gotową na Twoją pierwszą wiadomość. Możesz też wystartować jedną prosto z [zadania](/pl/notes-todos-plans/) albo z [issue lub pull requesta](/pl/github/).
+OhPiChamber tworzy gałąź, konfiguruje folder i otwiera w nim nową sesję, gotową na Twoją pierwszą wiadomość. Możesz też wystartować jedną prosto z [zadania](/pl/notes-todos-plans/) albo z [issue lub pull requesta](/pl/github/).
 
-Bez pytań: wybierz **Szybki worktree** w tym samym menu gałęzi. OpenChamber nada gałęzi tymczasową nazwę i skieruje na nią nową sesję. Gdy agent nada zadaniu nazwę, zmieni też nazwę gałęzi zgodnie z zadaniem, np. na `fix/login-timeout`, o ile gałąź nie została jeszcze wypchnięta.
+Bez pytań: wybierz **Szybki worktree** w tym samym menu gałęzi. OhPiChamber nada gałęzi tymczasową nazwę i skieruje na nią nową sesję. Gdy agent nada zadaniu nazwę, zmieni też nazwę gałęzi zgodnie z zadaniem, np. na `fix/login-timeout`, o ile gałąź nie została jeszcze wypchnięta.
 
 ## Na pasku bocznym
 
@@ -27,7 +27,7 @@ Worktree to jeden wiersz na pasku bocznym, a pod nim wszystkie jego sesje. Pod s
 
 ## Projekty otwarte na folderze repozytorium
 
-Jeśli otwierasz projekt na folderze wewnątrz repozytorium, na przykład `repo/ai`, nowe worktree otwierają się w tym samym miejscu. Sesja w nowym worktree startuje w tym samym folderze checkoutu, więc agent znajduje konfigurację, która w nim leży. Projekt otwarty na katalogu głównym repozytorium startuje w katalogu głównym worktree, jak dotąd. Jeśli gałąź nie ma takiego folderu, sesja startuje w katalogu głównym worktree, a OpenChamber o tym informuje.
+Jeśli otwierasz projekt na folderze wewnątrz repozytorium, na przykład `repo/ai`, nowe worktree otwierają się w tym samym miejscu. Sesja w nowym worktree startuje w tym samym folderze checkoutu, więc agent znajduje konfigurację, która w nim leży. Projekt otwarty na katalogu głównym repozytorium startuje w katalogu głównym worktree, jak dotąd. Jeśli gałąź nie ma takiego folderu, sesja startuje w katalogu głównym worktree, a OhPiChamber o tym informuje.
 
 ## Przywróć pracę
 
@@ -35,7 +35,7 @@ Gdy praca jest gotowa, użyj **Integrate** w widoku Git, aby przenieść commity
 
 ## Posprzątaj
 
-Gdy zadanie jest skończone, wybierz **Zarchiwizuj worktree** w menu wiersza albo przytrzymaj Shift i kliknij przycisk archiwizacji, który pojawia się w wierszu w miejscu przycisku nowej sesji. OpenChamber archiwizuje worktree: folder znika, a jego sesje, niezacommitowane zmiany i gałąź czekają na stronie Archiwum. Jeśli działa w nim jeszcze sesja, worktree zostaje.
+Gdy zadanie jest skończone, wybierz **Zarchiwizuj worktree** w menu wiersza albo przytrzymaj Shift i kliknij przycisk archiwizacji, który pojawia się w wierszu w miejscu przycisku nowej sesji. OhPiChamber archiwizuje worktree: folder znika, a jego sesje, niezacommitowane zmiany i gałąź czekają na stronie Archiwum. Jeśli działa w nim jeszcze sesja, worktree zostaje.
 
 Oznaczenie wiersza jako gotowego tylko zabiera go z W toku. Żeby archiwizować worktree za każdym razem, gdy oznaczasz go jako gotowy, albo po scaleniu jego PR, włącz to w **Ustawienia → Sesje → Zakończone worktree**.
 
@@ -45,9 +45,9 @@ Aby pozbyć się worktree na dobre, usuń go z jego menu albo usuń zarchiwizowa
 
 ## Jeśli coś wygląda nie tak
 
-Worktree może wymagać uwagi, jeśli jego folder zniknął, jego gałąź jest w stanie odłączonym (detached) albo scalanie lub rebase jest niedokończone. OpenChamber to oznacza, byś mógł to naprawić — zobacz [Worktree i Git](/pl/troubleshooting/worktrees-git/).
+Worktree może wymagać uwagi, jeśli jego folder zniknął, jego gałąź jest w stanie odłączonym (detached) albo scalanie lub rebase jest niedokończone. OhPiChamber to oznacza, byś mógł to naprawić — zobacz [Worktree i Git](/pl/troubleshooting/worktrees-git/).
 
 ## Powiązane
 
 - [Multi-run](/pl/multi-run/) — uruchom wiele sesji worktree naraz
-- [Przepływy Git](/pl/git/) — commituj i integruj z wnętrza OpenChamber
+- [Przepływy Git](/pl/git/) — commituj i integruj z wnętrza OhPiChamber

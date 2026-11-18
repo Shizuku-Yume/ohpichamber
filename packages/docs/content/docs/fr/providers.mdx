@@ -5,7 +5,7 @@ description: Connectez des fournisseurs IA, choisissez des modèles et configure
 
 # Fournisseurs, modèles et agents
 
-Avant qu’OpenChamber puisse faire quoi que ce soit, au moins un fournisseur IA doit être connecté. Cette page explique comment connecter un fournisseur, choisir un modèle et adapter les agents.
+Avant qu’OhPiChamber puisse faire quoi que ce soit, au moins un fournisseur IA doit être connecté. Cette page explique comment connecter un fournisseur, choisir un modèle et adapter les agents.
 
 ## Connecter un fournisseur
 
@@ -13,7 +13,7 @@ Avant qu’OpenChamber puisse faire quoi que ce soit, au moins un fournisseur IA
 2. Ouvrez le menu **Add provider** et choisissez un fournisseur qui n’est pas encore connecté.
 3. Connectez-vous de l’une des deux façons, selon le fournisseur :
    - **API key** — collez votre clé et enregistrez.
-   - **Connexion OAuth** — ouvrez le lien d’autorisation dans votre navigateur pour vous connecter. Si demandé, collez le code d’autorisation dans OpenChamber, puis finalisez la connexion.
+   - **Connexion OAuth** — ouvrez le lien d’autorisation dans votre navigateur pour vous connecter. Si demandé, collez le code d’autorisation dans OhPiChamber, puis finalisez la connexion.
 
 ### Fournisseurs personnalisés et autres
 
@@ -23,7 +23,7 @@ Pour les passerelles, modèles sur réseau local, Ollama, LiteLLM et API similai
 2. Saisissez un ID de fournisseur, un nom affiché, une URL de base (`http://` ou `https://`), une clé API facultative et au moins un identifiant et nom de modèle.
 3. Indiquez la fenêtre de contexte et le nombre maximal de jetons de sortie du modèle. Les métadonnées avancées (telles que les options de raisonnement, les variantes et les modalités) peuvent être configurées en JSON dans les détails du modèle.
 4. Ajoutez des en-têtes de requête facultatifs.
-5. Enregistrez — OpenChamber enregistre le fournisseur et les modèles via l'Agent Service, en conservant les clés API comme identifiants en écriture seule.
+5. Enregistrez — OhPiChamber enregistre le fournisseur et les modèles via l'Agent Service, en conservant les clés API comme identifiants en écriture seule.
 6. Pour modifier un fournisseur personnalisé existant, ouvrez-le et choisissez **Edit**.
 
 Une clé API est facultative. Les endpoints locaux sans clé (comme Ollama, LiteLLM ou llama.cpp) et les services utilisant une authentification par en-têtes peuvent être connectés sans clé API.

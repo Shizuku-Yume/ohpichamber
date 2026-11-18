@@ -1,7 +1,7 @@
 {
   "name": "OhPiChamber",
   "short_name": "OhPiChamber",
-  "description": "OpenChamber desktop companion for the OpenCode AI coding agent",
+  "description": "Web interface for the OhPiChamber native agent",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#151313",

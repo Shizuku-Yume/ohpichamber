@@ -97,7 +97,7 @@ export const buildRuntimeStatusReport = async (): Promise<string> => {
 
   const lines = [
     `Time: ${now.toISOString()}`,
-    `OpenChamber version: ${appVersion}`,
+    `OhPiChamber version: ${appVersion}`,
     `Runtime: ${origin || '(unknown)'} (api=${apiBase || '(unknown)'})`,
     `Host health: ${health.status === null ? `unavailable (${health.error ?? 'no response'})` : `HTTP ${health.status}`}`,
     `Agent Service readiness: ${readiness.error ? `unavailable (${readiness.error})` : readiness.ready ? 'ready' : 'not ready'}`,
@@ -128,7 +128,7 @@ export const buildRuntimeStatusReport = async (): Promise<string> => {
   if (origin.startsWith('openchamber-ui://')) {
     const isWindows = /Windows NT/.test(platform);
     const isMacDesktop = /Mac OS X|Macintosh/.test(platform);
-    lines.push(`- OpenChamber desktop: ${isWindows
+    lines.push(`- OhPiChamber desktop: ${isWindows
       ? '%APPDATA%\\OhPiChamber\\logs\\main.log'
       : isMacDesktop
         ? '~/Library/Logs/OhPiChamber/main.log'

@@ -175,8 +175,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp app/build/outputs/bundle/release/*.aab "release-assets/OpenChamber-${VERSION_NAME}-${BUILD_NUMBER}-android.aab"
-          cp app/build/outputs/apk/release/*.apk "release-assets/OpenChamber-${VERSION_NAME}-${BUILD_NUMBER}-android.apk"
+          cp app/build/outputs/bundle/release/*.aab "release-assets/OhPiChamber-${VERSION_NAME}-${BUILD_NUMBER}-android.aab"
+          cp app/build/outputs/apk/release/*.apk "release-assets/OhPiChamber-${VERSION_NAME}-${BUILD_NUMBER}-android.apk"
           files=(
             app/build/outputs/bundle/release/*.aab
             app/build/outputs/apk/release/*.apk
@@ -250,6 +250,9 @@ jobs:
           install_profile "$widget_profile" IOS_WIDGET_PROFILE_UUID
           install_profile "$nse_profile" IOS_NSE_PROFILE_UUID
           echo "APPLE_SIGNING_READY=true" >> "$GITHUB_ENV"
+
+      - name: Generate brand assets
+        run: bun run brand:generate
 
       - name: Prepare mobile assets
         run: bun run mobile:sync

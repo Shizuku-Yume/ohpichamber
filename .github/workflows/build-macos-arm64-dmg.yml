@@ -63,6 +63,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      - name: Generate brand assets
+        run: bun run brand:generate
+
       - name: Build Electron app (arm64)
         working-directory: packages/electron
         env:
@@ -88,7 +91,7 @@ jobs:
               --config.mac.notarize=false \
               --config.mac.verifyUpdateCodeSignature=false
           fi
-          bun run verify:agent-runtime "dist/mac-arm64/OpenChamber.app/Contents/Resources"
+          bun run verify:agent-runtime "dist/mac-arm64/OhPiChamber.app/Contents/Resources"
 
       - name: Prepare DMG artifact
         run: |
@@ -97,7 +100,7 @@ jobs:
           DMG_PATH="packages/electron/dist/*.dmg"
           if ls $DMG_PATH 1> /dev/null 2>&1; then
             DMG_FILE=$(ls $DMG_PATH | head -n 1)
-            DMG_NAME="OpenChamber_Electron_${{ inputs.macos_version }}_arm64.dmg"
+            DMG_NAME="OhPiChamber_Electron_${{ inputs.macos_version }}_arm64.dmg"
             cp "$DMG_FILE" "artifacts/$DMG_NAME"
           else
             echo "Error: DMG file not found at $DMG_PATH"

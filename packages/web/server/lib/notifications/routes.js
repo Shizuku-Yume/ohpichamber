@@ -25,8 +25,8 @@ const parsePushUnsubscribeBody = (body) => {
 export const NOTIFICATION_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
 /** The settings that turn native push on, named in the UI's unavailable copy. */
-export const NATIVE_PUSH_RELAY_SETTING = 'OPENCHAMBER_PUSH_RELAY_URL';
-export const NATIVE_PUSH_RELAY_DISABLED_SETTING = 'OPENCHAMBER_PUSH_RELAY_DISABLED';
+const NATIVE_PUSH_RELAY_SETTING = 'OPENCHAMBER_PUSH_RELAY_URL';
+const NATIVE_PUSH_RELAY_DISABLED_SETTING = 'OPENCHAMBER_PUSH_RELAY_DISABLED';
 
 export const registerNotificationRoutes = (app, dependencies) => {
   const {

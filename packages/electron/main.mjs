@@ -284,9 +284,8 @@ const LOCAL_DESKTOP_CLIENT_DEDUPE_KEY = 'desktop-local';
 // connecting to someone else's server).
 const REMOTE_DESKTOP_CLIENT_KIND = 'desktop';
 const ENV_OVERRIDE_HOST_ID = '__env';
-const GITHUB_BUG_REPORT_URL = 'https://github.com/openchamber/openchamber/issues/new?template=bug_report.yml';
-const GITHUB_FEATURE_REQUEST_URL = 'https://github.com/openchamber/openchamber/issues/new?template=feature_request.yml';
-const DISCORD_INVITE_URL = 'https://discord.gg/ZYRSdnwwKA';
+const GITHUB_BUG_REPORT_URL = 'https://github.com/Shizuku-Yume/ohpichamber/issues/new?template=bug_report.yml';
+const GITHUB_FEATURE_REQUEST_URL = 'https://github.com/Shizuku-Yume/ohpichamber/issues/new?template=feature_request.yml';
 const INSTALLED_APPS_CACHE_TTL_SECS = 60 * 60 * 24;
 const INSTALLED_APPS_CACHE_FILE = 'discovered-apps.json';
 // Bump when discovery results change shape or matching semantics change, so cached
@@ -5462,8 +5461,6 @@ const buildMacMenu = (locale = 'en') => {
         { type: 'separator' },
         { label: t('reportABug'), click: () => shell.openExternal(GITHUB_BUG_REPORT_URL) },
         { label: t('suggestFeature'), click: () => shell.openExternal(GITHUB_FEATURE_REQUEST_URL) },
-        { type: 'separator' },
-        { label: t('joinDiscord'), click: () => shell.openExternal(DISCORD_INVITE_URL) },
       ],
     },
   ]);
@@ -5579,8 +5576,6 @@ const buildAutoHiddenMenu = (locale = 'en') => {
         { type: 'separator' },
         { label: t('reportABug'), click: () => shell.openExternal(GITHUB_BUG_REPORT_URL) },
         { label: t('suggestFeature'), click: () => shell.openExternal(GITHUB_FEATURE_REQUEST_URL) },
-        { type: 'separator' },
-        { label: t('joinDiscord'), click: () => shell.openExternal(DISCORD_INVITE_URL) },
       ],
     },
   ]);

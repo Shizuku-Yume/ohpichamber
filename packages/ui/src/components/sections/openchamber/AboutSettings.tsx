@@ -12,12 +12,9 @@ import {
   SettingsFieldRow,
   SETTINGS_BRAND_TITLE_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
-  SETTINGS_SPACE_SECTION_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
-const GITHUB_URL = 'https://github.com/openchamber/openchamber';
-const DISCORD_URL = 'https://discord.gg/ZYRSdnwwKA';
-const X_URL = 'https://x.com/openchamber_dev';
+const GITHUB_URL = 'https://github.com/Shizuku-Yume/ohpichamber';
 
 /** Version of the server this page is served by, from `/api/system/info`. */
 function useServerVersion(): string | null {
@@ -85,8 +82,6 @@ export const AboutSettings: React.FC = () => {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {[
                 { href: GITHUB_URL, icon: 'github-fill' as const, label: 'GitHub' },
-                { href: DISCORD_URL, icon: 'discord-fill' as const, label: 'Discord' },
-                { href: X_URL, icon: 'twitter-xfill' as const, label: '@openchamber_dev' },
               ].map((link) => (
                 <a
                   key={link.href}

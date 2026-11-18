@@ -416,7 +416,7 @@ export function getLinearBrokerUrl() {
 }
 
 /** An explicitly configured callback, for a custom Linear OAuth app. */
-export function getExplicitLinearRedirectUri() {
+function getExplicitLinearRedirectUri() {
   const fromEnv = readEnv('OPENCHAMBER_LINEAR_REDIRECT_URI');
   if (fromEnv) return fromEnv;
   const stored = readSettingString('linearRedirectUri');

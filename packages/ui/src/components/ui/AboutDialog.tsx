@@ -176,7 +176,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           <div className="flex flex-col items-center gap-2 pt-2">
             <div className="flex items-center justify-center gap-4">
               <a
-                href="https://github.com/openchamber/openchamber"
+                href="https://github.com/Shizuku-Yume/ohpichamber"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
@@ -184,25 +184,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 <Icon name="github-fill" className="h-4 w-4" />
                 <span>GitHub</span>
               </a>
-              <a
-                href="https://discord.gg/ZYRSdnwwKA"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Icon name="discord-fill" className="h-4 w-4" />
-                <span>Discord</span>
-              </a>
             </div>
-            <a
-              href="https://x.com/openchamber_dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Icon name="twitter-xfill" className="h-4 w-4" />
-              <span>@openchamber_dev</span>
-            </a>
           </div>
 
           <p className="typography-meta text-muted-foreground pt-2">

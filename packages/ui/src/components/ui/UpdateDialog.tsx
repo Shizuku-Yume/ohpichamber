@@ -29,7 +29,7 @@ interface UpdateDialogProps {
   onRestart: () => void;
 }
 
-const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/Shizuku-Yume/ohpichamber/releases';
 
 type ChangelogSection = {
   version: string;
@@ -172,7 +172,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
 
           {/* Changelog Rendering */}
           {changelog && (
-              <div className="rounded-lg border border-border bg-surface-elevated/20 overflow-hidden">
+            <div className="rounded-lg border border-border bg-surface-elevated/20 overflow-hidden">
               <ScrollableOverlay
                 className="max-h-[400px] p-0"
                 fillContainer={false}
@@ -217,8 +217,8 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                           }}
                         >
                           {section.notes
-                              ? <ReleaseNotesBody notes={section.notes} folded={true} />
-                              : <SimpleMarkdownRenderer content={section.content} disableLinkSafety={true} enableFileReferences={false} />}
+                            ? <ReleaseNotesBody notes={section.notes} folded={true} />
+                            : <SimpleMarkdownRenderer content={section.content} disableLinkSafety={true} enableFileReferences={false} />}
                         </div>
                       </div>
                     ))}

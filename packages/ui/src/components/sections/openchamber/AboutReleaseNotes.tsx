@@ -5,7 +5,7 @@ import { fetchReleaseNotes, formatReleaseDate, type ReleaseNotesRelease } from '
 import { ReleaseNotesBody } from '@/components/update/ReleaseNotesBody';
 import { useI18n } from '@/lib/i18n';
 
-const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
+const GITHUB_RELEASES_URL = 'https://github.com/Shizuku-Yume/ohpichamber/releases';
 
 /**
  * What the installed version brought, read from the changelog bundled with

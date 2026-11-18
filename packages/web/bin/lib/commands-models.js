@@ -1,3 +1,4 @@
+import { formatModelRef } from '@openchamber/agent-contract';
 import { TunnelCliError, EXIT_CODE } from './cli-errors.js';
 import { resolveTargetPort } from './cli-api-target.js';
 import { requestControlAction } from './cli-control.js';
@@ -9,11 +10,6 @@ const asNonEmptyString = (value) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const formatModelRef = (entry) => {
-  const providerID = asNonEmptyString(entry?.providerID) || asNonEmptyString(entry?.providerId);
-  const modelID = asNonEmptyString(entry?.modelID) || asNonEmptyString(entry?.modelId) || asNonEmptyString(entry?.id);
-  return providerID && modelID ? `${providerID}/${modelID}` : null;
-};
 
 const formatDefaultLine = ({ defaultModel, defaultAgent, defaultVariant }) => {
   const model = asNonEmptyString(defaultModel) || 'none';

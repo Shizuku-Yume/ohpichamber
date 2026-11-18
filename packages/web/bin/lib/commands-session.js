@@ -1,3 +1,4 @@
+import { formatModelRef } from '@openchamber/agent-contract';
 import { TunnelCliError, EXIT_CODE } from './cli-errors.js';
 import { resolveTargetPort } from './cli-api-target.js';
 import { parseGoalTokenBudget } from './cli-goal.js';
@@ -64,10 +65,8 @@ const formatTextMessage = (message) => {
 };
 
 const formatSessionModel = (session) => {
-  const model = session?.model;
-  const providerID = asNonEmptyString(model?.providerID) || asNonEmptyString(model?.providerId);
-  const modelID = asNonEmptyString(model?.id) || asNonEmptyString(model?.modelID) || asNonEmptyString(model?.modelId);
-  return providerID && modelID ? `${providerID}/${modelID}` : null;
+  if (!session?.model) return null;
+  return formatModelRef(session.model) || null;
 };
 
 const formatSessionLine = (session) => {

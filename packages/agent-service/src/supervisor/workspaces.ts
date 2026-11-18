@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { CounterSchema, EntityIdSchema, CacheWarmingApplyResultSchema, CacheWarmingUpdateRequestSchema, type CacheWarmingState, type CacheWarmingUpdateRequest, type CacheWarmingApplyResult, type CacheWarmingWorkerApplyOutcome } from '@openchamber/agent-contract';
+import { CounterSchema, EntityIdSchema, CacheWarmingApplyResultSchema, CacheWarmingUpdateRequestSchema, type CacheWarmingMode, type CacheWarmingState, type CacheWarmingUpdateRequest, type CacheWarmingApplyResult, type CacheWarmingWorkerApplyOutcome } from '@openchamber/agent-contract';
 import { CacheWarmingPartialWriteDetailsSchema } from '@openchamber/agent-contract';
 import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
 import { WorkerOperationError, type WorkerRegistry, type StatelessWorkerInput } from './workers.ts';
@@ -44,7 +44,12 @@ export class WorkspaceCatalogs {
   private readonly prewarming = new Map<string, Promise<void>>();
   private stateTail: Promise<void> = Promise.resolve();
   private readonly file: string;
-  constructor(private readonly stateDirectory: string, private readonly workers: WorkerRegistry, private readonly pluginCoordinator?: () => CatalogCoordinator) {
+  constructor(
+    private readonly stateDirectory: string,
+    private readonly workers: WorkerRegistry,
+    private readonly pluginCoordinator?: () => CatalogCoordinator,
+    private readonly sessionWarmingOverride?: (rootSessionId: string) => CacheWarmingMode | null,
+  ) {
     this.file = join(stateDirectory, 'workspace-catalog-owners.json');
   }
   async initialize(): Promise<void> {
@@ -211,6 +216,15 @@ export class WorkspaceCatalogs {
     return result.state;
   }
 
+  async withWarmingLock<T>(workspaceId: string, operation: (readWorkspaceWarming: () => Promise<CacheWarmingState>) => Promise<T>): Promise<T> {
+    const workspace = this.get(workspaceId);
+    return this.serial(workspace.agentDirectoryId, async () => operation(async () => {
+      const result = await this.operationNow(workspaceId, { type: 'catalog.warming.read' });
+      if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog.warming operation.');
+      return result.state;
+    }));
+  }
+
   async updateCacheWarming(workspaceId: string, input: CacheWarmingUpdateRequest): Promise<CacheWarmingApplyResult> {
     const request = CacheWarmingUpdateRequestSchema.parse(input);
     const workspace = this.get(workspaceId);
@@ -219,7 +233,13 @@ export class WorkspaceCatalogs {
       if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog.warming operation.');
       const persisted = result.state;
       // Capture generations after persistence; never restart cold workers just to warm them.
-      const active = this.workers.list().filter(worker => worker.kind === 'session' && worker.workspaceId === workspaceId && (worker.state === 'ready' || worker.state === 'starting'));
+      // Sessions with an explicit per-session warming override keep their own mode.
+      const active = this.workers.list().filter(worker =>
+        worker.kind === 'session'
+        && worker.workspaceId === workspaceId
+        && (worker.state === 'ready' || worker.state === 'starting')
+        && (this.sessionWarmingOverride?.(worker.rootSessionId) ?? null) === null,
+      );
       const workers = await Promise.all(active.map(async (worker): Promise<CacheWarmingWorkerApplyOutcome> => {
         const identity = { workspaceId, rootSessionId: worker.rootSessionId, workerGeneration: worker.workerGeneration };
         try {

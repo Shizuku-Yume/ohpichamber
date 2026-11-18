@@ -7,7 +7,7 @@ const session = { sessionId: 's', projectId: 'p', workspaceId: 'w', displayPath:
 const seed: ProjectionSeed = { createdAt: 1, updatedAt: 1, mode: { kind: 'main' }, branch: { branchId: 'branch:opaque', branchVersion: '1', leafMessageId: null }, turns: [], messages: [] };
 const input = (event: ProjectionEvent, timestamp = 2): ProjectionInput => ({ timestamp, event });
 function cursorFailure(journal: SessionJournal, cursor?: string) {
-  try { journal.subscribe(cursor, () => {}); }
+  try { journal.subscribe(cursor, () => { }); }
   catch (error) { if (error instanceof ProjectionError) return { status: error.status, code: error.code }; throw error; }
   throw new Error('Cursor was accepted');
 }
@@ -35,7 +35,7 @@ describe('SessionJournal consumer boundary', () => {
     expect(first).toEqual(second);
     expect(first).toHaveLength(1);
     expect(first[0]).toMatchObject({ type: 'session.updated', mode });
-    expect(journal.subscribe(`${journal.runtime().epoch}:0`, () => {}).replay).toEqual(first);
+    expect(journal.subscribe(`${journal.runtime().epoch}:0`, () => { }).replay).toEqual(first);
     journal.replace({ ...seed, mode: { ...mode, status: 'paused' } });
     expect(journal.snapshot().session.mode).toEqual({ ...mode, status: 'paused' });
     unsubscribeFirst();
@@ -69,13 +69,13 @@ describe('SessionJournal consumer boundary', () => {
     expect(transient[0]).toMatchObject({ type: 'btw.delta', sequence: '1' });
     expect(durable[0]).toMatchObject({ type: 'session.updated', sequence: '2' });
     expect(subscription.replay).toEqual([]);
-    expect(journal.subscribe(`${journal.runtime().epoch}:1`, () => {}).replay).toEqual(durable);
+    expect(journal.subscribe(`${journal.runtime().epoch}:1`, () => { }).replay).toEqual(durable);
   });
   test('replay covers its exact ring boundary and distinguishes invalid from unavailable cursors', () => {
     const journal = new SessionJournal(session, seed);
     const events = journal.append(Array.from({ length: 1001 }, (_, index) => input({ type: 'tool.started', toolCallId: `tool${index}`, toolName: 'bash', input: {} })));
     const epoch = journal.runtime().epoch;
-    const replay = journal.subscribe(`${epoch}:1`, () => {}).replay;
+    const replay = journal.subscribe(`${epoch}:1`, () => { }).replay;
     expect(replay.map(event => event.sequence)).toEqual(events.slice(1).map(event => event.sequence));
     expect(cursorFailure(journal, `${epoch}:0`)).toEqual({ status: 410, code: 'RESYNC_REQUIRED' });
     expect(cursorFailure(journal)).toEqual({ status: 410, code: 'RESYNC_REQUIRED' });
@@ -169,5 +169,98 @@ describe('SessionJournal consumer boundary', () => {
     expect(() => journal.history({ sessionId: 's', limit: 1, cursor: first.nextCursor, leafTurnId: 't' })).toThrow(ProjectionError);
     journal.append([input({ type: 'message.created', messageId: 'm3', turnId: 't2', role: 'assistant' })]);
     expect(() => journal.history({ sessionId: 's', cursor: first.nextCursor })).toThrow(ProjectionError);
+  });
+
+  test('projects live compacting state, clears it on session.compacted/unavailable, and tracks todos across updates and seeds', () => {
+    const todos = [{ name: 'Build', tasks: [{ content: 'Wire projection', status: 'in_progress' as const }] }];
+    const compacting = { method: 'soft-compacted' as const, reason: 'threshold' as const, startedAt: 10 };
+    const journal = new SessionJournal(session, { ...seed, compacting, todos });
+    expect(journal.snapshot().compacting).toEqual(compacting);
+    expect(journal.snapshot().todos).toEqual(todos);
+
+    journal.append([input({ type: 'session.compacted', compactionId: 'c1', method: 'soft-compacted', tokensBefore: 100, completedAt: 20 })]);
+    expect(journal.snapshot().compacting).toBeNull();
+    expect(journal.snapshot().todos).toEqual(todos);
+
+    const nextCompacting = { method: 'shaken' as const, startedAt: 30 };
+    const nextTodos = [{ name: 'Build', tasks: [{ content: 'Wire projection', status: 'completed' as const }] }];
+    journal.append([
+      input({ type: 'session.updated', compacting: nextCompacting }),
+      input({ type: 'session.updated', todos: nextTodos }),
+    ]);
+    expect(journal.snapshot().compacting).toEqual(nextCompacting);
+    expect(journal.snapshot().todos).toEqual(nextTodos);
+
+    journal.append([input({ type: 'session.updated', compacting: null }), input({ type: 'session.updated', todos: [] })]);
+    expect(journal.snapshot().compacting).toBeNull();
+    expect(journal.snapshot().todos).toEqual([]);
+
+    journal.append([input({ type: 'session.updated', compacting: nextCompacting })]);
+    journal.unavailable('worker exited');
+    expect(journal.snapshot().compacting).toBeNull();
+
+    journal.replace({ ...seed, todos });
+    expect(journal.snapshot().compacting).toBeNull();
+    expect(journal.snapshot().todos).toEqual(todos);
+    journal.close();
+  });
+
+  test('session.compacted clears compacting and materializes settled compaction notice message valid under SessionSnapshotSchema', () => {
+    const journal = new SessionJournal(session, seed);
+    begin(journal);
+    const initialBranchVersion = BigInt(journal.snapshot().branch.branchVersion);
+
+    journal.append([input({ type: 'session.updated', compacting: { method: 'soft-compacted', reason: 'threshold', startedAt: 10 } }, 10)]);
+    expect(journal.snapshot().compacting).toEqual({ method: 'soft-compacted', reason: 'threshold', startedAt: 10 });
+
+    journal.append([input({
+      type: 'session.compacted',
+      compactionId: 'c-live',
+      method: 'soft-compacted',
+      tokensBefore: 11300,
+      tokensAfter: 2400,
+      summary: 'Compacted summary',
+      warning: 'Low headroom',
+      completedAt: 25,
+    }, 25)]);
+
+    const snapshot = journal.snapshot();
+    expect(snapshot.compacting).toBeNull();
+    expect(snapshot.branch.leafMessageId).toBe('c-live');
+    expect(BigInt(snapshot.branch.branchVersion)).toBe(initialBranchVersion + 1n);
+    expect(snapshot.turns.at(-1)?.assistantMessageIds).toEqual(['m', 'c-live']);
+    expect(snapshot.messages.at(-1)).toEqual({
+      messageId: 'c-live',
+      sessionId: 's',
+      turnId: 't',
+      role: 'assistant',
+      createdAt: 25,
+      parts: [{
+        type: 'notice',
+        partId: 'c-live:compaction',
+        noticeType: 'compaction',
+        level: 'info',
+        details: {
+          method: 'soft-compacted',
+          tokensBefore: 11300,
+          tokensAfter: 2400,
+          summary: 'Compacted summary',
+          warning: 'Low headroom',
+        },
+      }],
+    });
+    expect(snapshot.window.lastMessageId).toBe('c-live');
+    expect(journal.history({ sessionId: 's' }).messages.at(-1)?.messageId).toBe('c-live');
+
+    // Duplicate compactionId does not double-materialize
+    journal.append([input({
+      type: 'session.compacted',
+      compactionId: 'c-live',
+      method: 'soft-compacted',
+      tokensBefore: 11300,
+      completedAt: 25,
+    }, 26)]);
+    expect(journal.snapshot().messages.filter(m => m.messageId === 'c-live')).toHaveLength(1);
+    journal.close();
   });
 });

@@ -1,6 +1,6 @@
 # OMP-native chat basics
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** omp-native-chat/integration
 

@@ -1,4 +1,4 @@
-export const BROWSER_FETCH_METADATA_HEADERS = ['sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'sec-fetch-user'];
+const BROWSER_FETCH_METADATA_HEADERS = ['sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'sec-fetch-user'];
 
 const filteredRequestHeaders = new Set([
   // Client credentials for the OpenChamber server (UI client tokens) must

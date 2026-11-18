@@ -92,7 +92,7 @@ export class StatelessWorker {
       isCurrent: () => !this.closed,
     }) : undefined;
     this.agents = new NativeAgents({
-      cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd: input.cwd, agentDirectory: input.agentDirectory, models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       availableToolNames: () => BUILTIN_TOOL_NAMES,
     });

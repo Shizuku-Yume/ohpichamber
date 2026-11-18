@@ -69,3 +69,89 @@ export const CacheWarmingApplyResultSchema = z.strictObject({
   });
 });
 export type CacheWarmingApplyResult = z.infer<typeof CacheWarmingApplyResultSchema>;
+
+export const SessionCacheWarmingStateSchema = z.strictObject({
+  sessionId: EntityIdSchema,
+  workspaceId: EntityIdSchema,
+  revision: CounterSchema,
+  mode: CacheWarmingModeSchema.nullable(),
+  workspaceMode: CacheWarmingModeSchema,
+  effectiveMode: CacheWarmingModeSchema,
+}).superRefine((state, context) => {
+  const expectedEffective = state.mode ?? state.workspaceMode;
+  if (state.effectiveMode !== expectedEffective) {
+    context.addIssue({
+      code: 'custom',
+      path: ['effectiveMode'],
+      message: 'Effective mode equals the session override when set, otherwise the workspace mode',
+    });
+  }
+  if (state.revision === '0' && state.mode !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['mode'],
+      message: 'Revision 0 represents an unconfigured session inheriting workspace mode',
+    });
+  }
+});
+export type SessionCacheWarmingState = z.infer<typeof SessionCacheWarmingStateSchema>;
+
+export const SessionCacheWarmingUpdateRequestSchema = z.strictObject({
+  expectedRevision: CounterSchema,
+  mode: CacheWarmingModeSchema.nullable(),
+});
+export type SessionCacheWarmingUpdateRequest = z.infer<typeof SessionCacheWarmingUpdateRequestSchema>;
+
+export const SessionCacheWarmingApplyResultSchema = z.strictObject({
+  persisted: SessionCacheWarmingStateSchema,
+  status: z.enum(['applied', 'failed', 'no-active-worker']),
+  worker: CacheWarmingWorkerApplyOutcomeSchema.nullable(),
+}).superRefine((result, context) => {
+  if (result.status === 'no-active-worker') {
+    if (result.worker !== null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['worker'],
+        message: 'No-active-worker status forbids a worker outcome',
+      });
+    }
+    return;
+  }
+  if (result.worker === null) {
+    context.addIssue({
+      code: 'custom',
+      path: ['worker'],
+      message: 'Active worker status requires a worker outcome',
+    });
+    return;
+  }
+  if (result.worker.outcome !== result.status) {
+    context.addIssue({
+      code: 'custom',
+      path: ['status'],
+      message: 'Status matches the single session worker outcome',
+    });
+  }
+  if (result.worker.worker.rootSessionId !== result.persisted.sessionId) {
+    context.addIssue({
+      code: 'custom',
+      path: ['worker', 'worker', 'rootSessionId'],
+      message: 'Worker rootSessionId matches the persisted sessionId',
+    });
+  }
+  if (result.worker.worker.workspaceId !== result.persisted.workspaceId) {
+    context.addIssue({
+      code: 'custom',
+      path: ['worker', 'worker', 'workspaceId'],
+      message: 'Worker belongs to the persisted workspace',
+    });
+  }
+  if (result.worker.outcome === 'applied' && result.worker.mode !== result.persisted.effectiveMode) {
+    context.addIssue({
+      code: 'custom',
+      path: ['worker', 'mode'],
+      message: 'Applied worker mode matches the persisted effectiveMode',
+    });
+  }
+});
+export type SessionCacheWarmingApplyResult = z.infer<typeof SessionCacheWarmingApplyResultSchema>;

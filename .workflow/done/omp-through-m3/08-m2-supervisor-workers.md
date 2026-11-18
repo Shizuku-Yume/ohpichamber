@@ -3,7 +3,6 @@
 **Effort:** omp-through-m3
 **Task type:** feature
 **Base commit:** 5ac4e9c85ac6adcc0ae58fcdcc6b3c36bbdb5e07
-**Base branch:** omp-through-m3/m1-integration
 **Started:** 2026-10-12T16:06:42+00:00
 **Finished:** 2026-10-12T18:07:54+00:00
 

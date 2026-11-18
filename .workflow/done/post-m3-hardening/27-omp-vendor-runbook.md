@@ -3,7 +3,6 @@
 **Effort:** post-m3-hardening
 **Task type:** feature
 **Base commit:** 94d356cb21b3ef0423daa9f0a19c0df4e75df3c4
-**Base branch:** post-m3-hardening/15-docker-image-omp
 **Started:** 2026-10-24T12:20:00+08:00
 **Finished:** 2026-10-24T12:32:00+08:00
 

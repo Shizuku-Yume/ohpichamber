@@ -101,6 +101,12 @@ import { resolveEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { problemMessage } from '@/lib/problemMessage';
 import {
+  isSessionKeptWarm,
+  useSessionWarmingSaving,
+  useSessionWarmingState,
+  useSessionWarmingStore,
+} from '@/stores/useSessionWarmingStore';
+import {
   getSessionWorktreeMenuState,
   type SessionWorktreeMenuTarget,
   type StartSessionWorktreeMenuLoadResult,
@@ -629,6 +635,16 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     },
   });
   const isSessionMenuOpen = isMenuOpen || isContextMenuOpen;
+  const canToggleWarming = !archivedBucket && !isSubtaskSession;
+  const sessionWarmingState = useSessionWarmingState(canToggleWarming ? session.sessionId : null);
+  const isSessionWarmingSaving = useSessionWarmingSaving(canToggleWarming ? session.sessionId : null);
+  const isSessionWarm = isSessionKeptWarm(sessionWarmingState);
+  React.useEffect(() => {
+    if (!isSessionMenuOpen || !canToggleWarming) {
+      return;
+    }
+    void useSessionWarmingStore.getState().loadSessionWarming(session.sessionId);
+  }, [canToggleWarming, isSessionMenuOpen, session.sessionId]);
   const multiRunKey = React.useMemo(() => getMultiRunIdentity(resolvedSession)?.key ?? null, [resolvedSession]);
 
   const descendantCount = React.useMemo(() => (exportTree ? collectNodeDescendantIds(exportTree).length : 0), [collectNodeDescendantIds, exportTree]);
@@ -1224,26 +1240,26 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   }) => (
     <>
       <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.rename')}>
-      <Item
-        onClick={() => {
-          // Defer rename until dropdown close transition completes.
-          // onOpenChangeComplete fires after animation + focus cleanup are done,
-          // avoiding focus stealing from Base UI's unmount cleanup.
-          pendingRenameRef.current = { id: session.sessionId, title: sessionTitle };
-        }}
-        className="[&>svg]:me-1"
-      >
-        <Icon name="pencil-ai" className="me-1 h-4 w-4" />
-        {t('sessions.sidebar.session.menu.rename')}
-        {isCurrentSession && renameShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{renameShortcut}</span> : null}
-      </Item>
+        <Item
+          onClick={() => {
+            // Defer rename until dropdown close transition completes.
+            // onOpenChangeComplete fires after animation + focus cleanup are done,
+            // avoiding focus stealing from Base UI's unmount cleanup.
+            pendingRenameRef.current = { id: session.sessionId, title: sessionTitle };
+          }}
+          className="[&>svg]:me-1"
+        >
+          <Icon name="pencil-ai" className="me-1 h-4 w-4" />
+          {t('sessions.sidebar.session.menu.rename')}
+          {isCurrentSession && renameShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{renameShortcut}</span> : null}
+        </Item>
       </SessionMenuItemHint>
       <SessionAiRenameMenuItem sessionID={session.sessionId} directory={sessionDirectory} open={isSessionMenuOpen} Item={Item} />
       <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.copyId')}>
-      <Item onClick={() => handleCopySessionId(session.sessionId)} className="[&>svg]:me-1">
-        <Icon name="file-copy" className="me-1 h-4 w-4" />
-        {t('sessions.sidebar.session.menu.copyId')}
-      </Item>
+        <Item onClick={() => handleCopySessionId(session.sessionId)} className="[&>svg]:me-1">
+          <Icon name="file-copy" className="me-1 h-4 w-4" />
+          {t('sessions.sidebar.session.menu.copyId')}
+        </Item>
       </SessionMenuItemHint>
       <PinToMenu
         slots={{ Item, Separator, Sub, SubTrigger, SubContent }}
@@ -1263,17 +1279,34 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       />
       {canTrackWork ? (
         <SessionMenuItemHint hint={isInWork ? t('sessions.sidebar.session.menuHint.markDone') : t('sessions.sidebar.session.menuHint.track')}>
-        <Item onClick={() => { void toggleSessionWork(); }} className="[&>svg]:me-1">
-          <Icon name={isInWork ? 'check' : 'eye'} className="me-1 h-4 w-4" />
-          {isInWork ? t('sessions.sidebar.session.work.markDone') : t('sessions.sidebar.session.work.track')}
-        </Item>
+          <Item onClick={() => { void toggleSessionWork(); }} className="[&>svg]:me-1">
+            <Icon name={isInWork ? 'check' : 'eye'} className="me-1 h-4 w-4" />
+            {isInWork ? t('sessions.sidebar.session.work.markDone') : t('sessions.sidebar.session.work.track')}
+          </Item>
+        </SessionMenuItemHint>
+      ) : null}
+      {canToggleWarming ? (
+        <SessionMenuItemHint hint={isSessionWarm ? t('sessions.sidebar.session.menuHint.stopWarm') : t('sessions.sidebar.session.menuHint.keepWarm')}>
+          <Item
+            disabled={isSessionWarmingSaving}
+            onClick={() => {
+              useSessionWarmingStore.getState().toggleSessionKeepWarm(session.sessionId)
+                .catch((error) => toast.error(problemMessage(error, t('sessions.warming.toggleFailed'))));
+            }}
+            className="[&>svg]:me-1"
+            data-session-keep-warm={session.sessionId}
+            data-session-warm={isSessionWarm ? 'true' : 'false'}
+          >
+            <Icon name="fire" className={cn('me-1 h-4 w-4', isSessionWarm && 'text-[var(--status-warning)]')} />
+            {isSessionWarm ? t('sessions.sidebar.session.menu.stopWarm') : t('sessions.sidebar.session.menu.keepWarm')}
+          </Item>
         </SessionMenuItemHint>
       ) : null}
       <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.exportMarkdown')}>
-      <Item onClick={() => { void handleExportSession(); }} className="[&>svg]:me-1">
-        <Icon name="download" className="me-1 h-4 w-4" />
-        {t('sessions.sidebar.session.menu.exportMarkdown')}
-      </Item>
+        <Item onClick={() => { void handleExportSession(); }} className="[&>svg]:me-1">
+          <Icon name="download" className="me-1 h-4 w-4" />
+          {t('sessions.sidebar.session.menu.exportMarkdown')}
+        </Item>
       </SessionMenuItemHint>
       {guestSessionActionEntries.map((entry) => (
         <Item key={`${entry.guest.id}:${entry.action.id}`} onClick={() => handleGuestSessionAction(entry)} className="[&>svg]:me-1">
@@ -1398,10 +1431,10 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       ) : null}
       {multiRunKey ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.openRunOverview')}>
-        <Item onClick={() => useUIStore.getState().setRunOverviewKey(multiRunKey)} className="[&>svg]:me-1">
-          <ArrowsMerge className="me-1 h-4 w-4" />
-          {t('sessions.sidebar.session.menu.openRunOverview')}
-        </Item>
+          <Item onClick={() => useUIStore.getState().setRunOverviewKey(multiRunKey)} className="[&>svg]:me-1">
+            <ArrowsMerge className="me-1 h-4 w-4" />
+            {t('sessions.sidebar.session.menu.openRunOverview')}
+          </Item>
         </SessionMenuItemHint>
       ) : null}
 
@@ -1508,53 +1541,53 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
 
       {!isVSCode ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.openInSidePanel')}>
-        <Item
-          disabled={!sessionDirectory}
-          onClick={handleOpenInSidePanel}
-          className="[&>svg]:me-1"
-        >
-          <Icon name="chat-4" className="me-1 h-4 w-4" />
-          <span className="truncate">{t('sessions.sidebar.session.menu.openInSidePanel')}</span>
-        </Item>
+          <Item
+            disabled={!sessionDirectory}
+            onClick={handleOpenInSidePanel}
+            className="[&>svg]:me-1"
+          >
+            <Icon name="chat-4" className="me-1 h-4 w-4" />
+            <span className="truncate">{t('sessions.sidebar.session.menu.openInSidePanel')}</span>
+          </Item>
         </SessionMenuItemHint>
       ) : null}
 
       {isElectron ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.openMiniChatWindow')}>
-        <Item
-          disabled={!sessionDirectory}
-          onClick={handleOpenMiniChatWindow}
-          className="[&>svg]:me-1"
-        >
-          <Icon name="window" className="me-1 h-4 w-4" />
-          <span className="truncate">{t('sessions.sidebar.session.menu.openMiniChatWindow')}</span>
-        </Item>
+          <Item
+            disabled={!sessionDirectory}
+            onClick={handleOpenMiniChatWindow}
+            className="[&>svg]:me-1"
+          >
+            <Icon name="window" className="me-1 h-4 w-4" />
+            <span className="truncate">{t('sessions.sidebar.session.menu.openMiniChatWindow')}</span>
+          </Item>
         </SessionMenuItemHint>
       ) : null}
 
       <Separator />
       {!archivedBucket ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.archive')}>
-        <Item className="[&>svg]:me-1" onClick={() => handleDeleteSession(session, { archivedBucket })}>
-          <Icon name="inbox-archive" className="me-1 h-4 w-4" />
-          {t('sessions.sidebar.bulkActions.archive')}
-          {isCurrentSession && archiveShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{archiveShortcut}</span> : null}
-        </Item>
+          <Item className="[&>svg]:me-1" onClick={() => handleDeleteSession(session, { archivedBucket })}>
+            <Icon name="inbox-archive" className="me-1 h-4 w-4" />
+            {t('sessions.sidebar.bulkActions.archive')}
+            {isCurrentSession && archiveShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{archiveShortcut}</span> : null}
+          </Item>
         </SessionMenuItemHint>
       ) : null}
       {archivedBucket ? (
         <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.restore')}>
-        <Item className="[&>svg]:me-1" onClick={() => handleRestoreSession(session)}>
-          <Icon name="inbox-unarchive" className="me-1 h-4 w-4" />
-          {t('sessions.sidebar.bulkActions.restore')}
-        </Item>
+          <Item className="[&>svg]:me-1" onClick={() => handleRestoreSession(session)}>
+            <Icon name="inbox-unarchive" className="me-1 h-4 w-4" />
+            {t('sessions.sidebar.bulkActions.restore')}
+          </Item>
         </SessionMenuItemHint>
       ) : null}
       <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.delete')}>
-      <Item className="text-destructive focus:text-destructive [&>svg]:me-1" onClick={() => handleDeleteSession(session, { archivedBucket, hardDelete: true })}>
-        <Icon name="delete-bin" className="me-1 h-4 w-4" />
-        {t('sessions.sidebar.bulkActions.delete')}
-      </Item>
+        <Item className="text-destructive focus:text-destructive [&>svg]:me-1" onClick={() => handleDeleteSession(session, { archivedBucket, hardDelete: true })}>
+          <Icon name="delete-bin" className="me-1 h-4 w-4" />
+          {t('sessions.sidebar.bulkActions.delete')}
+        </Item>
       </SessionMenuItemHint>
     </>
   );
@@ -1791,198 +1824,198 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
               />
             }
           >
-          {treeSlot}
-          <div className="flex min-w-0 flex-1 items-center">
-            {(
-              <Tooltip actionsRef={rowTooltip.actionsRef} onOpenChange={rowTooltip.onOpenChange}>
-                {/* Rows without a tooltip keep the trigger inert: an open
+            {treeSlot}
+            <div className="flex min-w-0 flex-1 items-center">
+              {(
+                <Tooltip actionsRef={rowTooltip.actionsRef} onOpenChange={rowTooltip.onOpenChange}>
+                  {/* Rows without a tooltip keep the trigger inert: an open
                     but empty row tooltip would block the marks' own. It
                     closes as soon as the pointer leaves the row; a pointer
                     heading for its links still reaches them, as the popup
                     stays open along the way. */}
-                <TooltipTrigger asChild closeDelay={0} disabled={isVSCode}>
-                  {/* A button by role only: the body holds the PR badge, a
+                  <TooltipTrigger asChild closeDelay={0} disabled={isVSCode}>
+                    {/* A button by role only: the body holds the PR badge, a
                       real button, and HTML does not nest buttons. */}
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    data-session-row-main=""
-                    onKeyDown={(event) => {
-                      if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-                      event.preventDefault();
-                      event.currentTarget.click();
-                    }}
-	                    aria-pressed={selectionModeEnabled ? isRowSelected : undefined}
-	                    onPointerDown={handleRowPointerDown}
- 	                    onPointerUp={handleRowPointerEnd}
- 	                    onPointerCancel={handleRowPointerEnd}
-                    onPointerEnter={handleRowPointerEnter}
-                    onPointerLeave={handleRowHoverEnd}
-                    onFocus={handleRowFocus}
-                    onBlur={handleRowHoverEnd}
- 	                    onMouseDown={handleRowMouseDown}
- 	                    onClick={(event) => handleRowSelect(event)}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      handleSessionDoubleClick(session.sessionId, sessionTitle);
-                    }}
-                    className={cn(
-                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground select-none',
-	                      isTouchPressed && 'bg-interactive-hover/70',
-                      // Hover-revealed actions overlay the body, which keeps
-                      // its width; only permanent actions take room.
-                      isTimelineRow || !alwaysShowActions
-                        ? undefined
-                        : (isVSCode ? vscodeAlwaysActionPaddingClass : alwaysActionPaddingClass),
-                    )}
-                  >
-                    {rowBody}
-                  </div>
-                </TooltipTrigger>
-                {/* VS Code already shows project context via workspace headers, so
-                    the per-row metadata tooltip is redundant noise there. */}
-                {!isVSCode ? (
-                <TooltipContent side="right" sideOffset={8} className="max-w-xs text-start">
-                  <div className="flex min-w-44 flex-col gap-1.5 text-start text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                      <span dir="auto" className="oc-ui-start-align min-w-0 truncate font-medium text-foreground">{sessionTitle}</span>
-                      <span className="flex-shrink-0 text-muted-foreground" title={sessionUpdatedLabel}>{sessionCompactUpdatedLabel}</span>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      data-session-row-main=""
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                        event.preventDefault();
+                        event.currentTarget.click();
+                      }}
+                      aria-pressed={selectionModeEnabled ? isRowSelected : undefined}
+                      onPointerDown={handleRowPointerDown}
+                      onPointerUp={handleRowPointerEnd}
+                      onPointerCancel={handleRowPointerEnd}
+                      onPointerEnter={handleRowPointerEnter}
+                      onPointerLeave={handleRowHoverEnd}
+                      onFocus={handleRowFocus}
+                      onBlur={handleRowHoverEnd}
+                      onMouseDown={handleRowMouseDown}
+                      onClick={(event) => handleRowSelect(event)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleSessionDoubleClick(session.sessionId, sessionTitle);
+                      }}
+                      className={cn(
+                        'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground select-none',
+                        isTouchPressed && 'bg-interactive-hover/70',
+                        // Hover-revealed actions overlay the body, which keeps
+                        // its width; only permanent actions take room.
+                        isTimelineRow || !alwaysShowActions
+                          ? undefined
+                          : (isVSCode ? vscodeAlwaysActionPaddingClass : alwaysActionPaddingClass),
+                      )}
+                    >
+                      {rowBody}
                     </div>
-                    {tooltipProjectLabel ? (
-                      <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-                        <Icon name="folder" className="h-3 w-3 flex-shrink-0" />
-                        <span className="min-w-0 truncate">{tooltipProjectLabel}</span>
+                  </TooltipTrigger>
+                  {/* VS Code already shows project context via workspace headers, so
+                    the per-row metadata tooltip is redundant noise there. */}
+                  {!isVSCode ? (
+                    <TooltipContent side="right" sideOffset={8} className="max-w-xs text-start">
+                      <div className="flex min-w-44 flex-col gap-1.5 text-start text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <span dir="auto" className="oc-ui-start-align min-w-0 truncate font-medium text-foreground">{sessionTitle}</span>
+                          <span className="flex-shrink-0 text-muted-foreground" title={sessionUpdatedLabel}>{sessionCompactUpdatedLabel}</span>
+                        </div>
+                        {tooltipProjectLabel ? (
+                          <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                            <Icon name="folder" className="h-3 w-3 flex-shrink-0" />
+                            <span className="min-w-0 truncate">{tooltipProjectLabel}</span>
+                          </div>
+                        ) : null}
+                        {tooltipBranchLabel ? (
+                          <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                            {branchInSpace
+                              ? <Icon name="instance" className="h-3 w-3 flex-shrink-0" aria-hidden={false} role="img" aria-label={t('sessions.sidebar.group.space')} />
+                              : <Icon name="git-branch" className={cn('h-3 w-3 flex-shrink-0', branchPrIconColor && 'oc-ref-tint')} style={branchPrIconColor ? refTintStyle(branchPrIconColor) : undefined} />}
+                            <span className="min-w-0 truncate">{tooltipBranchLabel}</span>
+                          </div>
+                        ) : null}
+                        {refLines.length > 0 ? <SidebarRefLinks items={refLines} directory={trackerDirectory} /> : null}
+                        {currentRecap ? (
+                          <p className="min-w-0 line-clamp-4 text-muted-foreground">{currentRecap}</p>
+                        ) : null}
                       </div>
-                    ) : null}
-                    {tooltipBranchLabel ? (
-                      <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-                        {branchInSpace
-                          ? <Icon name="instance" className="h-3 w-3 flex-shrink-0" aria-hidden={false} role="img" aria-label={t('sessions.sidebar.group.space')} />
-                          : <Icon name="git-branch" className={cn('h-3 w-3 flex-shrink-0', branchPrIconColor && 'oc-ref-tint')} style={branchPrIconColor ? refTintStyle(branchPrIconColor) : undefined} />}
-                        <span className="min-w-0 truncate">{tooltipBranchLabel}</span>
-                      </div>
-                    ) : null}
-                    {refLines.length > 0 ? <SidebarRefLinks items={refLines} directory={trackerDirectory} /> : null}
-                    {currentRecap ? (
-                      <p className="min-w-0 line-clamp-4 text-muted-foreground">{currentRecap}</p>
-                    ) : null}
-                  </div>
-                </TooltipContent>
-                ) : null}
-              </Tooltip>
-            )}
-          </div>
-
-          {streamingIndicator && !mobileVariant && !isTimelineRow ? (
-            <div className="absolute inset-e-1 top-1/2 -translate-y-1/2 z-10">
-              {streamingIndicator}
+                    </TooltipContent>
+                  ) : null}
+                </Tooltip>
+              )}
             </div>
-          ) : null}
 
-          <div className={cn(
-            'absolute inset-e-1 z-10 flex items-center gap-0.5',
-            // Timeline actions overlay the first line's right cluster, not the
-            // row's vertical centre.
-            // Two-line rows: the row's 6px top padding plus the fixed 20px
-            // first line, so the 20px buttons cover that line exactly.
-            isTimelineRow && !isOneLineTimelineRow ? 'top-1.5 h-5' : 'top-1/2 -translate-y-1/2',
-            isSessionMenuOpen
-              ? 'opacity-100'
-              : (alwaysShowActions && !isVSCode)
+            {streamingIndicator && !mobileVariant && !isTimelineRow ? (
+              <div className="absolute inset-e-1 top-1/2 -translate-y-1/2 z-10">
+                {streamingIndicator}
+              </div>
+            ) : null}
+
+            <div className={cn(
+              'absolute inset-e-1 z-10 flex items-center gap-0.5',
+              // Timeline actions overlay the first line's right cluster, not the
+              // row's vertical centre.
+              // Two-line rows: the row's 6px top padding plus the fixed 20px
+              // first line, so the 20px buttons cover that line exactly.
+              isTimelineRow && !isOneLineTimelineRow ? 'top-1.5 h-5' : 'top-1/2 -translate-y-1/2',
+              isSessionMenuOpen
                 ? 'opacity-100'
-                : cn('opacity-0', revealOnHoverClass),
-          )}>
-            {/* Their own tooltip group: the pointer crosses these buttons on
+                : (alwaysShowActions && !isVSCode)
+                  ? 'opacity-100'
+                  : cn('opacity-0', revealOnHoverClass),
+            )}>
+              {/* Their own tooltip group: the pointer crosses these buttons on
                 its way into the row's tooltip, which a tooltip of the same
                 group would replace on the spot. */}
-            <TooltipProvider delayDuration={400}>
-            {showWorkAction ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      'inline-flex items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      actionButtonSizeClass,
-                      isInWork ? 'text-status-success' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                    aria-label={workActionLabel}
+              <TooltipProvider delayDuration={400}>
+                {showWorkAction ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          actionButtonSizeClass,
+                          isInWork ? 'text-status-success' : 'text-muted-foreground hover:text-foreground',
+                        )}
+                        aria-label={workActionLabel}
+                        onPointerDown={handleRowActionPointerDown}
+                        onMouseDown={handleRowActionMouseDown}
+                        onClick={handleWorkToggleClick}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        {/* The check glyph draws smaller than the others at the same
+                        box, so it takes the next icon size; the button stays put. */}
+                        <Icon name={isInWork ? 'check' : 'eye'} className={isInWork ? checkIconSizeClass : actionIconSizeClass} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6}>
+                      {workActionLabel}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+                {showQuickArchiveAction ? (
+                  <QuickSessionAction
+                    archiveLabel={t('sessions.sidebar.bulkActions.archive')}
+                    shortcut={isCurrentSession ? archiveShortcut : undefined}
+                    deleteLabel={t('sessions.sidebar.bulkActions.delete')}
+                    buttonSizeClass={actionButtonSizeClass}
+                    iconSizeClass={actionIconSizeClass}
                     onPointerDown={handleRowActionPointerDown}
                     onMouseDown={handleRowActionMouseDown}
-                    onClick={handleWorkToggleClick}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    {/* The check glyph draws smaller than the others at the same
-                        box, so it takes the next icon size; the button stays put. */}
-                    <Icon name={isInWork ? 'check' : 'eye'} className={isInWork ? checkIconSizeClass : actionIconSizeClass} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>
-                  {workActionLabel}
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-            {showQuickArchiveAction ? (
-              <QuickSessionAction
-                archiveLabel={t('sessions.sidebar.bulkActions.archive')}
-                shortcut={isCurrentSession ? archiveShortcut : undefined}
-                deleteLabel={t('sessions.sidebar.bulkActions.delete')}
-                buttonSizeClass={actionButtonSizeClass}
-                iconSizeClass={actionIconSizeClass}
-                onPointerDown={handleRowActionPointerDown}
-                onMouseDown={handleRowActionMouseDown}
-                onArchive={handleQuickArchiveClick}
-                onDelete={handleQuickDeleteClick}
-              />
-            ) : null}
-            {showOpenInEditorAction ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      actionButtonSizeClass,
-                    )}
-                    aria-label={t('sessions.sidebar.session.actions.openInEditor')}
-                    onPointerDown={handleOpenInEditorPointerDown}
-                    onMouseDown={handleOpenInEditorMouseDown}
-                    onClick={handleOpenInEditorClick}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <Icon name="external-link" className={actionIconSizeClass} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>
-                  {t('sessions.sidebar.session.actions.openInEditor')}
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-            <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} onOpenChangeComplete={handleMenuOpenChangeComplete}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    !alwaysShowActions
-                      ? cn('pointer-fine:hidden', isSessionMenuOpen
-                          ? 'h-4 w-4 opacity-100'
-                          : cn('h-4 w-4 opacity-0', revealOnHoverClass))
-                      : 'h-6 w-6 opacity-100',
-                  )}
-                  aria-label={t('sessions.sidebar.session.menu.label')}
-                  onPointerDown={handleMenuTriggerPointerDown}
-                  onMouseDown={handleMenuTriggerMouseDown}
-                  onClick={handleMenuTriggerClick}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                   <Icon name="more-2" className={actionIconSizeClass} />
-                </button>
-              </DropdownMenuTrigger>
-              {sessionMenuContent}
-            </DropdownMenu>
-            </TooltipProvider>
-          </div>
+                    onArchive={handleQuickArchiveClick}
+                    onDelete={handleQuickDeleteClick}
+                  />
+                ) : null}
+                {showOpenInEditorAction ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          actionButtonSizeClass,
+                        )}
+                        aria-label={t('sessions.sidebar.session.actions.openInEditor')}
+                        onPointerDown={handleOpenInEditorPointerDown}
+                        onMouseDown={handleOpenInEditorMouseDown}
+                        onClick={handleOpenInEditorClick}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <Icon name="external-link" className={actionIconSizeClass} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6}>
+                      {t('sessions.sidebar.session.actions.openInEditor')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+                <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} onOpenChangeComplete={handleMenuOpenChangeComplete}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        !alwaysShowActions
+                          ? cn('pointer-fine:hidden', isSessionMenuOpen
+                            ? 'h-4 w-4 opacity-100'
+                            : cn('h-4 w-4 opacity-0', revealOnHoverClass))
+                          : 'h-6 w-6 opacity-100',
+                      )}
+                      aria-label={t('sessions.sidebar.session.menu.label')}
+                      onPointerDown={handleMenuTriggerPointerDown}
+                      onMouseDown={handleMenuTriggerMouseDown}
+                      onClick={handleMenuTriggerClick}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <Icon name="more-2" className={actionIconSizeClass} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  {sessionMenuContent}
+                </DropdownMenu>
+              </TooltipProvider>
+            </div>
           </ContextMenu.Trigger>
           {contextMenuContent}
         </ContextMenuRoot>

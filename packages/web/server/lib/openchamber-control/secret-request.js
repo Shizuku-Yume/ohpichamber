@@ -5,9 +5,9 @@ import { isString } from '../shared/guards.js';
 import { OpenChamberControlError } from './error.js';
 import { createPageAnswers } from './render-page.js';
 
-export const SECRET_REQUEST_MAX_LABEL_LENGTH = 120;
-export const SECRET_REQUEST_MAX_REASON_LENGTH = 1000;
-export const SECRET_REQUEST_MAX_PLACEHOLDER_LENGTH = 80;
+const SECRET_REQUEST_MAX_LABEL_LENGTH = 120;
+const SECRET_REQUEST_MAX_REASON_LENGTH = 1000;
+const SECRET_REQUEST_MAX_PLACEHOLDER_LENGTH = 80;
 // A token, a key or a password: the card's field is one line.
 const SECRET_MAX_VALUE_LENGTH = 16_000;
 export const SECRET_FILE_LIFETIME_MS = 24 * 60 * 60 * 1000;
@@ -15,13 +15,6 @@ export const SECRET_FILE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const SAVED_NOTE = "The user saved the secret to file, which only this user can read. Read it inside the command that needs it, such as TOKEN=\"$(cat <file>)\" some-cli ...; never print, echo or log it, and never copy it into the project. The file is deleted 24 hours after it was saved.";
 const DECLINED_NOTE = "The user declined to give this secret. Continue without it or say what it blocks; ask again only if they want to.";
 const CHAT_SENT_EARLIER_NOTE = "The card did not wait: the user had already written in the chat before it appeared, and that message follows this result. Continue from that message; ask for the secret again only if it still fits.";
-
-/**
- * What the agent reads when the user wrote in the chat instead of answering
- * the card. The plugin builds that result itself (see ../agent-tool/runtime.js),
- * because the wait ends there, before this server hears of it.
- */
-export const SECRET_REQUEST_CLOSED_IN_CHAT_NOTE = "The user did not give the secret and wrote in the chat instead; their message follows this result. If they pasted a secret there, tell them to rotate it, since the chat keeps it.";
 
 const NOT_WAITING_MESSAGE = 'This request is no longer waiting for a secret';
 
@@ -42,7 +35,7 @@ export const createSecretFiles = ({ directory, now = Date.now, fsPromises = fs }
       await fsPromises.writeFile(file, value, { mode: 0o600, flag: 'wx' });
     } catch (error) {
       // `wx` creates the file before writing, so a failed write can leave part of the secret.
-      await fsPromises.rm(file, { force: true }).catch(() => {});
+      await fsPromises.rm(file, { force: true }).catch(() => { });
       throw error;
     }
     return file;
@@ -56,7 +49,7 @@ export const createSecretFiles = ({ directory, now = Date.now, fsPromises = fs }
     await Promise.all(names.map(async (name) => {
       const file = path.join(directory, name);
       const stat = await fsPromises.stat(file).catch(() => null);
-      if (stat && stat.mtimeMs < cutoff) await remove(file).catch(() => {});
+      if (stat && stat.mtimeMs < cutoff) await remove(file).catch(() => { });
     }));
   };
 
@@ -112,7 +105,7 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     // The answer can settle the wait just as the call ends (Stop, a chat
     // message): nobody will read the path, so the file goes too.
     if (signal?.aborted) {
-      if (file) await files.remove(file).catch(() => {});
+      if (file) await files.remove(file).catch(() => { });
       throw new OpenChamberControlError('The card stopped waiting before the user answered', 499);
     }
     if (answer.summary === 'saved' && file) {
@@ -161,7 +154,7 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     try {
       settle(sessionId, callId, 'saved', { file });
     } catch (error) {
-      await files.remove(file).catch(() => {});
+      await files.remove(file).catch(() => { });
       throw error;
     }
     return { status: 'saved' };

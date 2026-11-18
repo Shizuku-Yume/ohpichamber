@@ -108,7 +108,7 @@ function formatEventSummary(event: EvalStatusEvent): string {
     }
 }
 
-export interface EvalStepListProps {
+interface EvalStepListProps {
     statusEvents?: EvalStatusEvent[];
     statusEventsElided?: number;
     isCellRunning?: boolean;

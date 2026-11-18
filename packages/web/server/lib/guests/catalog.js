@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
-  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
+import {
+  GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
+  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum
+} from '@openchamber/sdk';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
@@ -398,7 +400,7 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
   // The SDK's manifest schema no longer carries this role, so the raw manifest is read too; a package that declares it still has to ship the folder.
   let rawParsed;
-  try { rawParsed = JSON.parse(raw); } catch {}
+  try { rawParsed = JSON.parse(raw); } catch { }
   const rawPlugin = parsed.manifest.contributes.opencodePlugin
     ?? (rawParsed?.openchamber?.contributes?.opencodePlugin ?? rawParsed?.contributes?.opencodePlugin);
   if (rawPlugin) {
@@ -424,25 +426,12 @@ const withSource = (guest, source, displayPath) => ({
 /** Whether the package has any page the host loads: panel, background, status section, or file editor. */
 export const hasGuestFrame = (guest) => Boolean(
   guest.entry || guest.backgroundEntry || guest.statusEntry
-    || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0)
-    || (Array.isArray(guest.blocks) && guest.blocks.length > 0),
+  || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0)
+  || (Array.isArray(guest.blocks) && guest.blocks.length > 0),
 );
 
 /** What a running service asked its card to say; memory only, since it says so again when it next starts. */
 const configurationNotes = new Map();
-
-/**
- * @param {string} guestId
- * @param {string | null} message `null` clears it
- * @returns {boolean} whether the card changed
- */
-export const setGuestConfigurationNote = (guestId, message) => {
-  const previous = configurationNotes.get(guestId) ?? null;
-  if (previous === message) return false;
-  if (message === null) configurationNotes.delete(guestId);
-  else configurationNotes.set(guestId, message);
-  return true;
-};
 
 /** Catalog JSON. Drops packageRoot. Keeps attach only when true. `entry` is absent for a page-less guest. */
 export const toPublicGuest = (guest) => {

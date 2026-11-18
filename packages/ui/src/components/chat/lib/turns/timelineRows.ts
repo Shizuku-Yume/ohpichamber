@@ -60,7 +60,7 @@ type TurnRowFields = {
  gapBelow: boolean;
 };
 
-export type TimelineRowsOptions = {
+type TimelineRowsOptions = {
  collapsedActivity: boolean;
  expandedTurns: ReadonlyMap<string, boolean>;
  showReasoningTraces: boolean;

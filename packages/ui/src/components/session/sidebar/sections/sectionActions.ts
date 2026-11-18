@@ -49,17 +49,6 @@ export const discardSectionDraft = (): void => useSidebarSectionsUiStore.setStat
 
 /** Asks for a new pin list's name; `pin` files the work into the list once it exists. */
 export const requestNewPinList = (pin: (listId: string) => void): void => useSidebarSectionsUiStore.setState({ pinListRequest: { pin } });
-/**
- * The phone's swipe Pin: with no pin lists it pins to Pinned or unpins at
- * once, as before; with lists it asks which one.
- */
-export const requestPinTo = (request: PinToRequest): void => {
-  if (useSessionDisplayStore.getState().pinLists.length === 0) {
-    if (request.current) request.unpin(); else request.pin(null);
-    return;
-  }
-  useSidebarSectionsUiStore.setState({ pinToRequest: request });
-};
 export const closePinToRequest = (): void => useSidebarSectionsUiStore.setState({ pinToRequest: null });
 export const closePinListRequest = (): void => useSidebarSectionsUiStore.setState({ pinListRequest: null });
 

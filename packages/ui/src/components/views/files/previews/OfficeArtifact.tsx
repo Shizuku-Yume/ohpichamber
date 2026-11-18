@@ -54,6 +54,22 @@ const sameBytes = (left: Uint8Array, right: Uint8Array): boolean => {
 };
 
 const hyperlinkFormula = (formula: string | undefined): string | undefined => formula?.match(/^HYPERLINK\(\s*"([^"]+)"/i)?.[1];
+type WorkQueue = {
+  enqueue: (task: () => Promise<void>, onError: () => void) => void;
+  afterIdle: (fn: () => void) => void;
+};
+
+const createWorkQueue = (): WorkQueue => {
+  let tail = Promise.resolve();
+  return {
+    enqueue: (task, onError) => {
+      tail = tail.then(task).catch(onError);
+    },
+    afterIdle: (fn) => {
+      void tail.finally(fn);
+    },
+  };
+};
 
 const WorkbookView: React.FC<{
   path: string;
@@ -65,7 +81,7 @@ const WorkbookView: React.FC<{
   onSave?: (bytes: Uint8Array<ArrayBuffer>) => Promise<boolean>;
   onChangedOnDisk: () => void;
   /** Stays with the owner, who closes the book only once this has drained. */
-  queue: React.RefObject<Promise<void>>;
+  queue: WorkQueue;
 }> = ({ path, book, bytes, sizeBytes, readBytes, onSave, onChangedOnDisk, queue }) => {
   const { t } = useI18n();
   const { sheets } = book.opened;
@@ -133,7 +149,7 @@ const WorkbookView: React.FC<{
   // Everything that reads or changes the workbook, its history or the file
   // runs here in order, so a retry or an undo never overtakes an edit.
   const enqueue = (task: () => Promise<void>) => {
-    queue.current = queue.current.then(task).catch(() => {
+    queue.enqueue(task, () => {
       // The session is back on the last good file, so the view must follow it.
       setSaveStatus('failed');
       reloadView();
@@ -332,7 +348,7 @@ export const OfficeArtifact: React.FC<{
   const { t } = useI18n();
   const [state, setState] = React.useState<LoadState>({ status: 'loading' });
   const [attempt, setAttempt] = React.useState(0);
-  const work = React.useRef<Promise<void>>(Promise.resolve());
+  const [work] = React.useState(createWorkQueue);
   const frameRef = React.useRef<HTMLIFrameElement>(null);
   const [selection, setSelection] = React.useState<{ quote: string; x: number; y: number } | null>(null);
   const closeSelection = React.useCallback(() => setSelection(null), []);
@@ -382,9 +398,9 @@ export const OfficeArtifact: React.FC<{
     return () => {
       controller.abort();
       // An edit may still be on its way to the file.
-      void work.current.finally(() => book?.close());
+      work.afterIdle(() => book?.close());
     };
-  }, [name, path, loadBytes, readPreview, attempt]);
+  }, [name, path, loadBytes, readPreview, attempt, work]);
 
   if (state.status === 'loading') {
     return <ContentLoadingState label={t('filesView.artifact.state.loading')} />;

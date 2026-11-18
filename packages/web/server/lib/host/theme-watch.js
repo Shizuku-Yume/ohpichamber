@@ -4,7 +4,7 @@ const SAFETY_POLL_MS = 30_000;
 const POLL_MS = 1000;
 
 /** Signals only request a fingerprint check; two equal checks settle a change. */
-export const createFolderChangeWatch = ({
+const createFolderChangeWatch = ({
  root,
  fingerprint,
  onChange,

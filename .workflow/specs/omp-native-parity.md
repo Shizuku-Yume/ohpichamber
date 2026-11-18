@@ -1,6 +1,6 @@
 # OMP-native parity: sessions, prompt, defaults, modes
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** omp-native-parity/integration (cut from omp-native-chat/integration at b309346934)
 

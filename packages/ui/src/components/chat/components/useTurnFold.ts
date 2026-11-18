@@ -13,7 +13,7 @@ export const finalActivityContentId = (turnId: string) => `turn-final-activity-$
  * once opened), the pages a turn without an answer showed, and the final
  * answer, whose own non-text parts fold with the rest.
  */
-export const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
+const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
  // Named by the rows (`timelineRows.ts`), which are built from the turn's
  // record: a live turn's newest parts may already finish an answer the
  // record does not have yet, and the answer has no row of its own until it does.

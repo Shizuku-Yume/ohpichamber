@@ -85,7 +85,7 @@ export const documentTransport = (): Promise<Transport> => {
 };
 
 let nextName = 1;
-export const newDocumentId = (): string => {
+const newDocumentId = (): string => {
   nextName += 1;
   return `document-${nextName}`;
 };
@@ -121,7 +121,7 @@ export class WorkbookBook {
     private readonly call: Transport,
     private readonly id: string,
     readonly opened: BookOpened,
-  ) {}
+  ) { }
 
   async layout(sheet: number, editable: boolean): Promise<SheetView> {
     const rows: string[][] = [];
@@ -163,15 +163,4 @@ export const openWorkbook = async (path: string, name: string, bytes: Uint8Array
   const id = newDocumentId();
   const opened = await call('workbook.open', { book: id, path, name, bytes });
   return opened ? new WorkbookBook(call, id, opened) : null;
-};
-
-/** Rows that arrive in pieces, so reading them never stops the app. */
-export const collectRows = () => {
-  const rows: string[][] = [];
-  return {
-    rows,
-    add: (chunk: { rows: string[][] }) => {
-      for (const row of chunk.rows) rows.push(row);
-    },
-  };
 };

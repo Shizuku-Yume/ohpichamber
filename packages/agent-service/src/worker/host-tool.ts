@@ -21,7 +21,7 @@ export const HOST_TOOL_NAMES: readonly HostToolName[] = [
   'openchamber_workflow',
 ] as const;
 
-export const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Object.freeze({
+const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Object.freeze({
   openchamber: true,
   web: true,
   openchamber_knowledge: true,

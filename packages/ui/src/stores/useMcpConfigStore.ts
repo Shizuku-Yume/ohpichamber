@@ -5,8 +5,8 @@ import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
 import { problemMessage } from '@/lib/problemMessage';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
-export type McpDraft = MCPServerConfig;
-export type McpInstallOutcome = 'applied' | 'saved-needs-auth' | 'saved-not-connected';
+type McpDraft = MCPServerConfig;
+type McpInstallOutcome = 'applied' | 'saved-needs-auth' | 'saved-not-connected';
 export type McpMutationResult =
   | { ok: true; result: MCPApplyResult; outcome: McpInstallOutcome }
   | { ok: false; error: string; result?: MCPApplyResult; outcome?: McpInstallOutcome };

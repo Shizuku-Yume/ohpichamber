@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { KNOWLEDGE_ICON_BUTTON_CLASS } from './knowledgeRowStyle';
 
 /** Back to the list, at the start of an opened entry's own toolbar. */
-export const KnowledgeBackButton: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
+const KnowledgeBackButton: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <button

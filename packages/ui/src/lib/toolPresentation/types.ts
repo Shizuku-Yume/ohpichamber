@@ -9,7 +9,7 @@ import type { IconName } from '@/components/icon/icons';
  */
 export type ToolGroup = 'read' | 'search' | 'call';
 
-export type ToolOutputLanguage = 'diff' | 'auto' | 'text';
+type ToolOutputLanguage = 'diff' | 'auto' | 'text';
 
 /** Everything the chat knows about one OMP tool, keyed by its native name. */
 export interface ToolPresentation {

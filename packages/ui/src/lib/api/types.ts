@@ -1,7 +1,6 @@
 export type {
   TrackerAPI,
   TrackerAccount,
-  TrackerAuthMethod,
   TrackerAuthOrigin,
   TrackerAuthStart,
   TrackerAuthStatus,
@@ -14,7 +13,6 @@ export type {
   TrackerDescriptor,
   TrackerItem,
   TrackerItemResult,
-  TrackerItemState,
   TrackerItemSummary,
   TrackerLabel,
   TrackerListOptions,
@@ -22,7 +20,6 @@ export type {
   TrackerLiveSummary,
   TrackerMappingResult,
   TrackerMappingWrite,
-  TrackerOAuthClientInput,
   TrackerPeopleFilter,
   TrackerPerson,
   TrackerPreferences,
@@ -30,7 +27,6 @@ export type {
   TrackerPriorityFilter,
   TrackerProgress,
   TrackerProviderId,
-  TrackerSessionStatusKind,
   TrackerSessionStatusPostInput,
   TrackerSessionStatusPostResult,
   TrackerStateCategory,
@@ -482,7 +478,7 @@ export interface GitNetworkRedactedEndpoint {
   fingerprint: string;
 }
 
-export interface GitNetworkRedactedDestination {
+interface GitNetworkRedactedDestination {
   displayName: string;
   fingerprint: string;
 }
@@ -493,7 +489,7 @@ interface GitNetworkRuntimeIdentity {
   label?: string;
 }
 
-export type GitNetworkTransportActor =
+type GitNetworkTransportActor =
   | {
     kind: 'provider';
     provider: string;
@@ -506,7 +502,7 @@ export type GitNetworkTransportActor =
     fingerprint: string;
   };
 
-export type GitNetworkTransport =
+type GitNetworkTransport =
   | { mode: 'anonymous'; verification: { status: 'anonymous' } }
   | {
     mode: 'managed';
@@ -662,7 +658,7 @@ export type GitManagedSshResult =
   | { status: 'rejected'; reason: 'candidate-expired' | 'candidate-changed' | 'fingerprint-mismatch' | 'candidate-unavailable' | 'inventory-full' }
   | { status: 'unsupported'; reason: 'host-setup-required' };
 
-export type GitNetworkOperationTarget =
+type GitNetworkOperationTarget =
   | {
     operation: 'push';
     repositoryId: string;
@@ -2220,115 +2216,6 @@ export interface RuntimeAPIs {
   worktrees?: WorktreeMetadata[];
 }
 
-export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
-
-// ============== Skills Catalog Types ==============
-
-type SkillsCatalogSourceId = string;
-
-type SkillsCatalogSourceType = 'github';
-
-export interface SkillsCatalogSource {
-  id: SkillsCatalogSourceId;
-  label: string;
-  description?: string;
-  source: string;
-  defaultSubpath?: string;
-  sourceType?: SkillsCatalogSourceType;
-  /** GitHub repository star count (null when unavailable) */
-  stars?: number | null;
-  /** GitHub repository last-push timestamp, ISO (null when unavailable) */
-  repoUpdatedAt?: string | null;
-}
-
-interface SkillsCatalogItemInstalledBadge {
-  isInstalled: boolean;
-  scope?: 'user' | 'project';
-  source?: 'opencode' | 'agents' | 'claude';
-}
-
-export interface SkillsCatalogItem {
-  sourceId: SkillsCatalogSourceId;
-  repoSource: string;
-  repoSubpath?: string;
-  gitIdentityId?: string;
-  skillDir: string;
-  skillName: string;
-  frontmatterName?: string;
-  description?: string;
-  installable: boolean;
-  warnings?: string[];
-  installed?: SkillsCatalogItemInstalledBadge;
-}
-
-export interface SkillsCatalogResponse {
-  ok: boolean;
-  sources?: SkillsCatalogSource[];
-  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsCatalogSourceResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: { kind: string; message: string };
-}
-
-export interface SkillsRepoScanRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-}
-
-type SkillsRepoScanError =
-  | { kind: 'authRequired'; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
-  | { kind: 'invalidSource'; message: string }
-  | { kind: 'gitUnavailable'; message: string }
-  | { kind: 'networkError'; message: string }
-  | { kind: 'unknown'; message: string };
-
-export interface SkillsRepoScanResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: SkillsRepoScanError;
-}
-
-interface SkillsInstallSelection {
-  skillDir: string;
-}
-
-export interface SkillsInstallRequest {
-  source: string;
-  subpath?: string;
-  sourceId?: string;
-  gitIdentityId?: string;
-  scope: 'user' | 'project';
-  targetSource?: 'opencode' | 'agents';
-  selections: SkillsInstallSelection[];
-  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
-  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
-}
-
-export type SkillsInstallError = SkillsRepoScanError | {
-  kind: 'conflicts';
-  message: string;
-  conflicts: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
-};
-
-export interface SkillsInstallResponse {
-  ok: boolean;
-  installed?: Array<{ skillName: string; skillDir?: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
-  skipped?: Array<{ skillName: string; reason: string }>;
-  error?: SkillsInstallError;
-  requiresReload?: boolean;
-  requiresManualRestart?: boolean;
-  reloadFailed?: boolean;
-  warning?: string;
-  message?: string;
-  reloadDelayMs?: number;
-}
-
-
 export interface GitCommitExtraFailure {
   extra: 'changeId' | 'notes';
   code: string;
@@ -2346,451 +2233,6 @@ export interface GitCommitExtrasFailure {
   extras: { changeId: string | null; notes: boolean; failed: GitCommitExtraFailure[] };
 }
 
-
-export interface CommandExecResult {
-  command: string;
-  success: boolean;
-  exitCode?: number;
-  stdout?: string;
-  stderr?: string;
-  error?: string;
-}
-
-
-export type GitHubUserSummary = {
-  login: string;
-  id?: number;
-  avatarUrl?: string;
-  name?: string;
-  email?: string;
-};
-
-
-export type GitHubChecksSummary = {
-  state: 'success' | 'failure' | 'pending' | 'unknown';
-  total: number;
-  success: number;
-  failure: number;
-  /** queued + in_progress + unconcluded runs. */
-  pending: number;
-  inProgress?: number;
-  queued?: number;
-  /** Earliest started_at among in-progress runs (ISO), for elapsed display. */
-  startedAt?: string;
-};
-
-
-export type GitHubCheckRun = {
-  id?: number;
-  name: string;
-  startedAt?: string;
-  completedAt?: string;
-  app?: {
-    name?: string;
-    slug?: string;
-  };
-  status?: string;
-  conclusion?: string | null;
-  detailsUrl?: string;
-  output?: {
-    title?: string;
-    summary?: string;
-    text?: string;
-  };
-  job?: {
-    runId?: number;
-    jobId?: number;
-    url?: string;
-    name?: string;
-    workflowName?: string;
-    conclusion?: string | null;
-    steps?: Array<{
-      name: string;
-      status?: string;
-      conclusion?: string | null;
-      number?: number;
-      startedAt?: string;
-      completedAt?: string;
-    }>;
-  };
-  annotations?: Array<{
-    path?: string;
-    startLine?: number;
-    endLine?: number;
-    level?: string;
-    message: string;
-    title?: string;
-    rawDetails?: string;
-  }>;
-};
-
-
-export type GitHubPullRequestSummary = GitHubPullRequest & {
-  author?: GitHubUserSummary | null;
-  body?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  headLabel?: string;
-  headRepo?: GitHubPullRequestHeadRepo | null;
-  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
-};
-
-
-type GitHubPullRequestFile = {
-  filename: string;
-  status?: string;
-  additions?: number;
-  deletions?: number;
-  changes?: number;
-  patch?: string;
-};
-
-
-type GitHubPullRequestReviewComment = {
-  id: number;
-  url: string;
-  body: string;
-  author?: GitHubUserSummary | null;
-  path?: string;
-  line?: number | null;
-  position?: number | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-
-export type GitHubPullRequestsListResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  prs?: GitHubPullRequestSummary[];
-  page?: number;
-  hasMore?: boolean;
-  failedRepos?: Array<{ owner: string; repo: string }>;
-};
-
-
-export type GitHubPullRequestContextResult = {
-  connected: boolean;
-  /** Server-side stamp of when the data was fetched from GitHub (ms epoch); survives server cache serves. */
-  fetchedAt?: number;
-  repo?: GitHubRepoRef | null;
-  pr?: GitHubPullRequestSummary | null;
-  issueComments?: GitHubIssueComment[];
-  reviewComments?: GitHubPullRequestReviewComment[];
-  files?: GitHubPullRequestFile[];
-  diff?: string;
-  checks?: GitHubChecksSummary | null;
-  checkRuns?: GitHubCheckRun[];
-};
-
-
-export type GitHubPullRequestStatus = {
-  connected: boolean;
-  /** Server-side stamp of when the data was fetched from GitHub (ms epoch); survives server cache serves. */
-  fetchedAt?: number;
-  repo?: GitHubRepoRef | null;
-  branch?: string;
-  pr?: GitHubPullRequest | null;
-  checks?: GitHubChecksSummary | null;
-  canMerge?: boolean;
-  defaultBranch?: string | null;
-  resolvedRemoteName?: string | null;
-};
-
-
-export type GitHubPullRequestRef = GitHubRepoSelector & { number: number };
-
-/** Live fields of a known PR, refreshed in batches for list surfaces. */
-
-
-export type GitHubPullRequestLiveSummary = GitHubPullRequestRef & {
-  state: GitHubPullRequest['state'];
-  draft: boolean;
-  title: string;
-  headSha?: string;
-  mergeable: boolean | null;
-  mergeableState: string | null;
-  /** Null for closed/merged PRs, whose checks are not actionable. */
-  checks: GitHubChecksSummary | null;
-};
-
-/** Live state of a known issue; a closed one says whether it was done or dropped. */
-
-
-export type GitHubIssueLiveSummary = GitHubPullRequestRef & {
-  title: string;
-  state: 'open' | 'completed' | 'not_planned';
-};
-
-
-export type GitHubIssueLabel = {
-  name: string;
-  color?: string;
-};
-
-
-export type GitHubRepoSelector = {
-  owner: string;
-  repo: string;
-};
-
-
-export type GitHubIssueSummary = {
-  number: number;
-  title: string;
-  url: string;
-  state: 'open' | 'closed';
-  author?: GitHubUserSummary | null;
-  labels?: GitHubIssueLabel[];
-  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
-};
-
-
-export type GitHubIssue = GitHubIssueSummary & {
-  body?: string;
-  assignees?: GitHubUserSummary[];
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-
-export type GitHubIssueComment = {
-  id: number;
-  url: string;
-  body: string;
-  author?: GitHubUserSummary | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-
-export type GitHubIssuesListResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  issues?: GitHubIssueSummary[];
-  page?: number;
-  hasMore?: boolean;
-  failedRepos?: Array<{ owner: string; repo: string }>;
-};
-
-
-export type GitHubReferenceKind = 'issue' | 'pull';
-
-
-export type GitHubReferencesOptions = {
-  kind: GitHubReferenceKind;
-  state?: RepositoryReferenceState;
-  people?: RepositoryReferencePeople;
-  /** Search text, or a pasted link or number, which names one item of either kind. */
-  query?: string;
-  cursor?: string | null;
-};
-
-
-type GitHubReferenceCommon = {
-  number: number;
-  title: string;
-  url: string;
-  /** The description as the preview shows it, cut at 20 000 characters. */
-  body: string;
-  bodyTruncated: boolean;
-  createdAt: string | null;
-  updatedAt: string | null;
-  author: { login: string; avatarUrl?: string } | null;
-  labels: GitHubIssueLabel[];
-  commentCount: number;
-  sourceRepo: GitHubRepoSelector & { source: string };
-  /** The provider's own project id (GitLab's is numeric); absent on GitHub, where `owner/repo` is the id. */
-  projectId?: string;
-  /**
-   * Set on items read from a GitLab project, which the picker shows the same
-   * way; absent on GitHub's own answers.
-   */
-  provider?: SourceControlProvider;
-};
-
-
-export type GitHubIssueReference = GitHubReferenceCommon & {
-  kind: 'issue';
-  state: GitHubIssueLiveSummary['state'];
-};
-
-
-export type GitHubPullReference = GitHubReferenceCommon & {
-  kind: 'pull';
-  state: GitHubPullRequest['state'];
-  draft: boolean;
-  head: string;
-  base: string;
-  headSha: string;
-  headRepo: GitHubPullRequestHeadRepo | null;
-};
-
-/** A comment as the picker preview shows it; review entries carry their verdict or file and line. */
-
-
-export type GitHubReferenceComment = {
-  author: { login: string; avatarUrl?: string } | null;
-  body: string;
-  createdAt: string | null;
-  url: string;
-  path: string | null;
-  line: number | null;
-  review: 'approved' | 'changes_requested' | 'commented' | 'dismissed' | null;
-};
-
-/** Someone asked to review, or who can be; `id` is what the host names them by (a login on GitHub). */
-
-
-export type GitHubReferenceReviewer = {
-  id: string;
-  login: string;
-  avatarUrl?: string;
-};
-
-/** What the preview adds for one item; too slow to ask for a whole page. */
-
-
-export type GitHubReferenceDetail = {
-  number: number;
-  /** Oldest first: the newest 50 comments and, for a PR, its reviews. */
-  comments: GitHubReferenceComment[];
-  /** How many conversation comments the item has in all. */
-  commentTotal: number;
-  /** Null for an issue. */
-  pull: {
-    reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
-    /** Asked to review and not done yet (GitHub); everyone set as a reviewer (GitLab). */
-    reviewers: GitHubReferenceReviewer[];
-    additions: number;
-    deletions: number;
-    changedFiles: number;
-    /**
-     * GitLab merge requests only, null when closed or merged. A GitHub PR's
-     * checks come with its status, the answer that also colours it.
-     */
-    checks?: GitHubChecksSummary | null;
-    /** The newest commits, oldest first, for the timeline beside the comments. */
-    commits: GitHubReferenceCommit[];
-    /** How many commits the PR has in all; null when the host does not say. */
-    commitTotal: number | null;
-  } | null;
-};
-
-
-export type GitHubReferenceCommit = {
-  sha: string;
-  headline: string;
-  /** The host account behind the commit, when it is known. */
-  author: { login: string; avatarUrl?: string } | null;
-  authorName: string | null;
-  committedAt: string | null;
-  url: string | null;
-};
-
-
-export type GitHubReferenceDetailResult =
-  | { connected: false }
-  | { connected: true; detail: GitHubReferenceDetail | null };
-
-/** An issue or PR as the reference picker lists and previews it. */
-
-
-export type GitHubReference = GitHubIssueReference | GitHubPullReference;
-
-/** What colours a listed open PR: its checks and whether it conflicts. */
-
-
-export type GitHubPullStatus = GitHubPullRequestRef & {
-  checks: GitHubChecksSummary | null;
-  mergeable: boolean | null;
-  mergeableState: string | null;
-};
-
-/** PRs GitHub could not resolve are left out of `statuses`. */
-
-
-export type GitHubPullStatusesResult =
-  | { connected: false }
-  | { connected: true; statuses: GitHubPullStatus[] };
-
-
-export type GitHubReferencesResult =
-  | { connected: false }
-  | {
-    connected: true;
-    /** Null when the project has no GitHub remote. */
-    repo: GitHubRepoRef | null;
-    items: GitHubReference[];
-    cursor: string | null;
-    hasMore: boolean;
-    total: number;
-  };
-
-
-export type GitHubRepoUpstreamResult = {
-  connected: boolean;
-  isFork: boolean;
-  upstream: { owner: string; repo: string; url: string; defaultBranch: string; defaultBranchSha: string | null; remoteName: string | null } | null;
-};
-
-
-export type GitHubIssueGetResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  issue?: GitHubIssue | null;
-};
-
-
-export type GitHubIssueCommentsResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  comments?: GitHubIssueComment[];
-};
-
-
-export type GitHubAuthStatus = {
-  connected: boolean;
-  user?: GitHubUserSummary | null;
-  scope?: string;
-  accounts?: GitHubAuthAccount[];
-  ghCli?: {
-    available: boolean;
-    disabled: boolean;
-    active: boolean;
-    user?: GitHubUserSummary | null;
-  } | null;
-};
-
-
-type GitHubAuthAccount = {
-  id: string;
-  credentialId: string;
-  credentialRevision: number;
-  providerUserId: string;
-  providerUserStatus: 'available' | 'unavailable';
-  user: GitHubUserSummary;
-  scope?: string;
-  current?: boolean;
-  source?: 'oauth' | 'pat' | 'cli' | 'gh-cli';
-  status?: 'valid' | 'invalid';
-};
-
-
-export type GitHubDeviceFlowStart = {
-  flowId: string;
-  userCode: string;
-  verificationUri: string;
-  verificationUriComplete?: string;
-  expiresIn: number;
-  interval: number;
-  scope?: string;
-};
-
-
-export type GitHubDeviceFlowComplete =
-  | { connected: true; user: GitHubUserSummary; scope?: string }
-  | { connected: false; status?: string; error?: string };
 
 
 export type LinearUserSummary = {
@@ -2954,20 +2396,6 @@ export type LinearIssuesListResult = {
 export type LinearIssueGetResult = {
   connected: boolean;
   issue?: LinearIssue | null;
-};
-
-/** Linear's workflow category; team-specific state names map onto these. */
-
-
-export type LinearStateType = 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
-
-/** Live state of a linked Linear issue, refreshed in batches for list surfaces. */
-
-
-export type LinearIssueLiveSummary = {
-  identifier: string;
-  title: string;
-  state: { name: string; type: LinearStateType };
 };
 
 

@@ -201,7 +201,7 @@ export const generatedImagePaths = (view: CanonicalToolView): string[] => {
     return parsed.success ? parsed.data.data.images.map((image) => image.path) : [];
 };
 
-export const secretRunCommandLine = (program: string, args: readonly string[]): string => {
+const secretRunCommandLine = (program: string, args: readonly string[]): string => {
     const hidden = (code: number) => code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x61c
         || (code >= 0x200b && code <= 0x200f) || (code >= 0x2028 && code <= 0x202e)
         || (code >= 0x2060 && code <= 0x2069) || code === 0xfeff;
@@ -214,7 +214,7 @@ export const secretRunCommandLine = (program: string, args: readonly string[]): 
 };
 
 /** The card a running `secret.run` call asks on, else null. */
-export const requestedSecretRun = (view: CanonicalToolView): RequestedSecretRun | null => {
+const requestedSecretRun = (view: CanonicalToolView): RequestedSecretRun | null => {
     if (view.tool !== OPENCHAMBER_SECRET_TOOL || view.state.status !== 'running') return null;
     const parsed = secretRunInputSchema.parse(view.state.input ?? {});
     if (parsed.action !== 'secret.run' && parsed.action !== 'run') return null;

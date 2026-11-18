@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createRequire } from 'node:module';
 
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
-export const isWorkflowFeatureAvailable = () => true;
+const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
 import { isPermissionMode } from '../permission-auto-accept/modes.js';
 

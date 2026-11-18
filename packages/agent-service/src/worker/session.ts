@@ -21,7 +21,9 @@ import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry
 import { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
 import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widgets/caption';
 import { listServicesTolerant, sendService, serviceLogs, stopService } from '@oh-my-pi/pi-coding-agent/launch/services';
-import { cfgAsyncWidgets } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import { cfgAsyncWidgets, cfgTasksTodoClearDelay } from '@oh-my-pi/pi-coding-agent/tools/settings';
+import { createTodoHudStateData, getTodoHudVisibility, TODO_HUD_STATE_CUSTOM_TYPE } from '@oh-my-pi/pi-coding-agent/tools/todo';
+import { isClosedTodo } from '@oh-my-pi/pi-tui/tools/todo';
 import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
 import { resolveToolTier } from '@oh-my-pi/pi-coding-agent/tools/approval';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
@@ -150,10 +152,15 @@ export class WorkerSession {
   private failed = false;
   private controllingBranch = false;
   private compacting = false;
+  private lastEmittedCompaction: { compactionId: string; completedAt: number } | undefined;
   private reviewingPlan = false;
   private planRevision = 0;
   private planReviewTask: Promise<void> | undefined;
   private publishedContinuationPending = false;
+  private todoAutoClearTimer: NodeJS.Timeout | undefined;
+  private todoAutoClearGeneration = 0;
+  private todoAutoClearSnapshotKey: string | undefined;
+  private todoAutoClearDelaySeconds: number | undefined;
   private readonly liveSubagents = new Map<string, Subagent>();
   readonly suggestionDriver: SuggestionDriver;
   private _draftPresent = false;
@@ -203,7 +210,7 @@ export class WorkerSession {
       () => this.publishContinuationPending(),
       mode => this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode } }]),
     );
-    this.projection = new WorkerProjection(session.sessionManager, this._sessionId);
+    this.projection = new WorkerProjection(session.sessionManager, this._sessionId, [], () => session.getTodoPhases());
     this.defaultToolNames = session.getActiveToolNames();
     this.defaultMountedNames = session.getMountedXdevToolNames();
     this.defaultRegisteredNames = session.getAllToolNames();
@@ -283,7 +290,16 @@ export class WorkerSession {
     try {
       this.modeController.observe(event);
       this.publishContinuationPending();
-      this.emit(this.projection.consume(event));
+      if (event.type === 'todo_auto_clear' && this.session.getTodoPhases().length > 0) {
+        this.session.setTodoPhases([]);
+      }
+      const projected = this.projection.consume(event);
+      for (const input of projected) {
+        if (input.event.type === 'session.compacted') {
+          this.lastEmittedCompaction = { compactionId: input.event.compactionId, completedAt: input.event.completedAt };
+        }
+      }
+      this.emit(projected);
       if (event.type === 'goal_updated' || (event.type === 'agent_end' && !this.modeController.isTransitioning())) {
         this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', mode: this.modeController.mode() } }]);
       }
@@ -298,7 +314,33 @@ export class WorkerSession {
           }
         }]);
       }
-      if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
+      if (event.type === 'tool_execution_end' && !event.isError && (event.toolName === 'todo' || event.toolName === 'eval')) {
+        if (event.toolName === 'eval') {
+          const todoUpdate = this.projection.syncTodosIfChanged(Date.now());
+          if (todoUpdate) this.emit([todoUpdate]);
+        }
+        this.syncTodoAutoClear();
+      }
+      if (event.type === 'auto_compaction_end' || event.type === 'manual_compaction_end' || event.type === 'todo_auto_clear') {
+        this.syncTodoAutoClear();
+      }
+      if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') {
+        const isTodoToolResultEnd =
+          event.type === 'message_end' &&
+          event.message.role === 'toolResult' &&
+          (event.message.toolName === 'todo' || event.message.toolName === 'eval') &&
+          !event.message.isError;
+        void this.bind().then(() => {
+          if (this.closed || this.failed) return;
+          if (isTodoToolResultEnd) {
+            const todoUpdate = this.projection.syncTodosIfChanged(Date.now());
+            if (todoUpdate) this.emit([todoUpdate]);
+          }
+          if (isTodoToolResultEnd || event.type === 'turn_end' || event.type === 'agent_end') {
+            this.syncTodoAutoClear();
+          }
+        }).catch(() => this.fail());
+      }
       if (event.type === 'agent_end') {
         this.scheduleAutoTitle();
         void this.suggestionDriver.handleAgentEnd(event);
@@ -735,9 +777,14 @@ export class WorkerSession {
         mode: 'rpc', uiContext: interaction.ui,
         reportSendError: () => owned?.fail(), reportRuntimeError: () => owned?.fail(), onShutdown: onFatal,
       }));
-      postInitTasks.push(warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode)).catch(() => { }));
+      const sessionWarmingMode = input.sessionWarmingMode;
+      const startupWarming = sessionWarmingMode !== undefined && sessionWarmingMode !== null
+        ? Promise.resolve().then(() => warming.apply(sessionWarmingMode))
+        : warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode));
+      postInitTasks.push(startupWarming.catch(() => { }));
       await Promise.all(postInitTasks);
       await initialPolicyCapture;
+      owned.syncTodoAutoClear();
       return owned;
     } catch (error) {
       interaction.close();
@@ -811,6 +858,82 @@ export class WorkerSession {
       await this.session.sessionManager.flush();
     });
     return this.binding;
+  }
+
+  private cancelTodoAutoClearTimer(): void {
+    this.todoAutoClearGeneration++;
+    this.todoAutoClearSnapshotKey = undefined;
+    this.todoAutoClearDelaySeconds = undefined;
+    if (this.todoAutoClearTimer) {
+      clearTimeout(this.todoAutoClearTimer);
+      this.todoAutoClearTimer = undefined;
+    }
+  }
+
+  private syncTodoAutoClear(): void {
+    if (this.closed || this.failed) {
+      this.cancelTodoAutoClearTimer();
+      return;
+    }
+    const phases = this.session.getTodoPhases();
+    const branch = this.session.sessionManager.getBranch();
+    if (phases.length === 0 || getTodoHudVisibility(branch, phases) === 'dismissed') {
+      this.cancelTodoAutoClearTimer();
+      return;
+    }
+    const tasks = phases.flatMap(phase => phase.tasks);
+    if (tasks.length === 0 || tasks.some(task => !isClosedTodo(task))) {
+      this.cancelTodoAutoClearTimer();
+      return;
+    }
+    const delaySeconds = cfgTasksTodoClearDelay.get(this.session.settings);
+    if (typeof delaySeconds !== 'number' || !Number.isFinite(delaySeconds) || delaySeconds < 0) {
+      this.cancelTodoAutoClearTimer();
+      return;
+    }
+    const snapshotKey = JSON.stringify(phases);
+    if (
+      this.todoAutoClearTimer !== undefined &&
+      this.todoAutoClearSnapshotKey === snapshotKey &&
+      this.todoAutoClearDelaySeconds === delaySeconds
+    ) {
+      return;
+    }
+    this.cancelTodoAutoClearTimer();
+    this.todoAutoClearSnapshotKey = snapshotKey;
+    this.todoAutoClearDelaySeconds = delaySeconds;
+    const generation = this.todoAutoClearGeneration;
+    const sessionId = this.session.sessionManager.getSessionId();
+    const sessionFile = this.session.sessionManager.getSessionFile();
+    const isCurrent = (): boolean =>
+      !this.closed &&
+      !this.failed &&
+      !this.controllingBranch &&
+      generation === this.todoAutoClearGeneration &&
+      this.session.sessionManager.getSessionId() === sessionId &&
+      this.session.sessionManager.getSessionFile() === sessionFile &&
+      JSON.stringify(this.session.getTodoPhases()) === snapshotKey;
+    const persistAndHide = async (): Promise<void> => {
+      this.todoAutoClearTimer = undefined;
+      this.todoAutoClearSnapshotKey = undefined;
+      this.todoAutoClearDelaySeconds = undefined;
+      await this.session.settleInFlightMessagePersistence();
+      await this.binding;
+      if (!isCurrent()) return;
+      const data = createTodoHudStateData(this.session.sessionManager.getBranch(), this.session.getTodoPhases(), 'dismissed');
+      if (!data) return;
+      this.session.sessionManager.appendCustomEntry(TODO_HUD_STATE_CUSTOM_TYPE, data);
+      await this.session.sessionManager.flush();
+      if (!isCurrent()) return;
+      const todoUpdate = this.projection.syncTodosIfChanged(Date.now());
+      if (todoUpdate) this.emit([todoUpdate]);
+    };
+    this.todoAutoClearTimer = setTimeout(() => {
+      void persistAndHide().catch(() => {
+        // Best-effort HUD auto-clear persistence; leave todos intact if persistence fails.
+      });
+    }, delaySeconds * 1000);
+    this.todoAutoClearTimer.unref?.();
   }
   /**
    * A recap is only meaningful for a settled session: a pending turn, an
@@ -1192,6 +1315,7 @@ export class WorkerSession {
         revertedMessageId: request.action === 'revert' ? request.messageId : null,
       }));
       this.projection.resetSelection();
+      this.syncTodoAutoClear();
       const seed = this.projection.seed();
       this.permissionBridge?.reset();
       this.interaction.cancelAll();
@@ -1213,6 +1337,7 @@ export class WorkerSession {
           if (previousLeaf === null) manager.resetLeaf(); else await this.session.navigateTree(previousLeaf, { summarize: false, allowAskReopen: false });
           await manager.appendEntriesAtomically(() => manager.appendCustomEntry(BRANCH_TYPE, previousRevert ?? { restoreLeafId: null, revertedMessageId: null }));
           this.projection.resetSelection();
+          this.syncTodoAutoClear();
           await this.modeController.restore();
           await this.modeController.goal.reconcile();
         } catch {
@@ -1293,9 +1418,12 @@ export class WorkerSession {
       await this.modeController.approve(compact ? async () => {
         this.session.setPlanReferencePath(review.planReference);
         try {
+          const previousCompaction = this.lastEmittedCompaction;
           const result = await this.session.compact(undefined, { internalGuidance: nativePrompt.render(planCompactPrompt, { planFilePath: review.planReference }), suppressContinuation: true });
-          const completedAt = Date.now();
-          this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId: randomUUID(), tokensBefore: result.tokensBefore, completedAt } }]);
+          if (!this.lastEmittedCompaction || this.lastEmittedCompaction === previousCompaction) {
+            const completedAt = Date.now();
+            this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId: randomUUID(), tokensBefore: result.tokensBefore, completedAt } }]);
+          }
         } catch (error) {
           // Compaction is best-effort: an already-compacted or too-small session
           // must not cancel the plan the user approved.
@@ -1515,6 +1643,7 @@ export class WorkerSession {
         try {
           const result = await this.catalogs.operation(operation.operation, operation.revision);
           if (operation.operation.type === 'skills.apply' && result.type === 'skills.applied' && result.result.outcome === 'applied') this.emit([{ timestamp: Date.now(), event: { type: 'catalog.updated', catalog: { kind: 'skills', state: this.catalogs.skills.read(operation.operation.sources) } } }]);
+          if (operation.operation.type === 'catalog.settings.apply') this.syncTodoAutoClear();
           return { type: 'catalog', result };
         } finally { if (applying) this.skillsApplying = false; }
       }
@@ -1554,8 +1683,9 @@ export class WorkerSession {
         if (branchRes.sessionFile) this._sessionFile = branchRes.sessionFile;
         const newSessionId = this.session.sessionManager.getSessionId();
         this._sessionId = newSessionId;
-        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId);
+        this.projection = new WorkerProjection(this.session.sessionManager, newSessionId, [], () => this.session.getTodoPhases());
         this.projection.resetSelection();
+        this.syncTodoAutoClear();
         await this.session.sessionManager.flush();
         const seed = this.projection.seed();
         return {
@@ -1972,6 +2102,9 @@ export class WorkerSession {
           const result = await this.session.resetSessionContext();
           this.session.sessionManager.beginTurnBudget(null, false);
           const dropped = result ? result.droppedCount : 0;
+          const todoUpdate = this.projection.syncTodosIfChanged(Date.now());
+          if (todoUpdate) this.emit([todoUpdate]);
+          this.syncTodoAutoClear();
           return { type: 'command', output: `Context reset — ${dropped} ${dropped === 1 ? 'message' : 'messages'} dropped; session continues.` };
         }
         const output: string[] = [];
@@ -1987,6 +2120,9 @@ export class WorkerSession {
         };
         const result = await executeAcpBuiltinSlashCommand(operation.text, runtime);
         if (result === false || 'prompt' in result) throw new ProjectionError(400, 'INVALID_REQUEST', 'Slash command cannot run as a builtin');
+        const todoUpdate = this.projection.syncTodosIfChanged(Date.now());
+        if (todoUpdate) this.emit([todoUpdate]);
+        this.syncTodoAutoClear();
         return { type: 'command', output: output.join('\n') };
       }
       case 'usage.stats': case 'usage.tools':
@@ -2103,7 +2239,16 @@ export class WorkerSession {
         this.compacting = true;
         try {
           await this.binding;
+          const previousCompaction = this.lastEmittedCompaction;
           const result = await this.session.compact(operation.instructions);
+          if (this.lastEmittedCompaction && this.lastEmittedCompaction !== previousCompaction) {
+            return {
+              type: 'compact',
+              compactionId: this.lastEmittedCompaction.compactionId,
+              tokensBefore: result.tokensBefore,
+              completedAt: this.lastEmittedCompaction.completedAt,
+            };
+          }
           const completedAt = Date.now();
           const compactionId = randomUUID();
           this.emit([{ timestamp: completedAt, event: { type: 'session.compacted', compactionId, tokensBefore: result.tokensBefore, completedAt } }]);
@@ -2147,6 +2292,7 @@ export class WorkerSession {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.cancelTodoAutoClearTimer();
     this.permissionBridge?.stop();
     this.pendingTitleInput = undefined;
     await this.stopAutoTitle();

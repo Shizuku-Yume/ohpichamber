@@ -49,7 +49,6 @@ const requestDirectory = (): string | null => useDirectoryStore.getState().curre
   || useProjectsStore.getState().getActiveProject()?.path || null;
 const resolveDirectory = (directory?: string | null): string | null => directory === undefined ? requestDirectory() : directory;
 const keyFor = (directory?: string | null): string => resolveDirectory(directory)?.trim() || DEFAULT_DIRECTORY;
-export const isCommandBuiltIn = (command: Command): boolean => !command.editable;
 export const invalidateCommandsLoadCache = (directory?: string | null): void => { loadedAt.delete(keyFor(directory)); };
 export const selectCommandsForDirectory = (state: Pick<CommandsStore, 'commandsByDirectory'>, directory?: string | null): Command[] =>
   state.commandsByDirectory[keyFor(directory)] ?? EMPTY_COMMANDS;

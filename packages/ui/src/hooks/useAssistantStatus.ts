@@ -3,7 +3,7 @@ import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
+import { useDirectorySync, useSessionCompacting, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
 import type { AgentStatus } from '@/lib/agentStatus';
 import { normalizeIntent, toolPresentation } from '@/lib/toolPresentation';
@@ -234,6 +234,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     );
 
     const { isWorking: isPhaseWorking } = useSessionActivity(currentSessionId, currentSessionDirectory ?? undefined);
+    const isCompacting = useSessionCompacting(currentSessionId, currentSessionDirectory ?? undefined) !== null;
 
     const parsedStatus = React.useMemo<ParsedStatusResult>(() => {
         const [signature] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
@@ -258,19 +259,22 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
     const baseWorking = React.useMemo<WorkingSummary>(() => {
         if (abortState.wasAborted) return { ...DEFAULT_WORKING, abortActive: abortState.abortActive };
+        const isWorking = isPhaseWorking || isCompacting;
         return {
-            isWorking: isPhaseWorking,
-            status: isPhaseWorking ? parsedStatus.status : null,
+            isWorking,
+            status: isCompacting
+                ? { key: 'chat.agentStatus.compacting' }
+                : isPhaseWorking ? parsedStatus.status : null,
             isWaitingForPermission: false,
             abortActive: false,
-            retryInfo: isPhaseWorking ? retryInfo : null,
+            retryInfo: isPhaseWorking && !isCompacting ? retryInfo : null,
         };
-    }, [isPhaseWorking, parsedStatus, retryInfo, abortState]);
+    }, [isPhaseWorking, isCompacting, parsedStatus, retryInfo, abortState]);
 
     const forming = React.useMemo<FormingSummary>(() => {
-        const isActive = isPhaseWorking && parsedStatus.isAnswering;
+        const isActive = isPhaseWorking && !isCompacting && parsedStatus.isAnswering;
         return { isActive, characterCount: 0 };
-    }, [isPhaseWorking, parsedStatus.isAnswering]);
+    }, [isPhaseWorking, isCompacting, parsedStatus.isAnswering]);
 
     const working = React.useMemo<WorkingSummary>(() => {
         if (baseWorking.abortActive) return baseWorking;

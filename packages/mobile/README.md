@@ -6,7 +6,7 @@ The mobile package reuses the web build, then rewrites `mobile.html` to `index.h
 
 ### Migration status
 
-In OhPiChamber, the Mobile Capacitor shell is retained under `SCOPE-2.4` in `.workflow/omp-migration/scope.md`. The mobile app bundles the UI only and connects to an OpenChamber server whose Host Gateway serves the Canonical `/api/agent/v1` API. Mobile embeds neither the host server nor the agent runtime. Capacitor reconnect, push, and offline behavior and device certification remain unverified (M5). Guest iframe support is planned for M5 under `SCOPE-16.0`, without local background child processes.
+Under `SCOPE-2.4` in `.workflow/omp-migration/scope.md`, the Capacitor shell bundles `MobileApp` on the Canonical Client and connects to a Host Gateway serving `/api/agent/v1` (with fetch-based SSE event streaming and native header-bearing terminal WebSockets). Mobile embeds neither the Host Gateway nor the OMP Agent Service or background child processes. Guest SDK iframes and Guest extension services are not mounted on mobile today (`loadGuestCatalog` marks the mobile surface `unsupported`, leaving Guest panels, actions, and commands web/desktop-only). Physical-device runtime verification—Android APK pairing, canonical chat streaming, reconnects, approvals, and unsigned/ad-hoc iOS IPA artifacts—is owned by M7 (`.workflow/specs/m7-release-verification.md`).
 
 ## Runtime Model
 
@@ -19,7 +19,7 @@ In OhPiChamber, the Mobile Capacitor shell is retained under `SCOPE-2.4` in `.wo
 - Password-protected OpenChamber servers can be unlocked from the mobile app. The app stores the issued client token with the saved connection.
 - **Additional headers** in Connect by address and the Instances add/edit form accepts proxy headers. Values use native secure storage and apply only to the entered address, including connection checks, password sign-in, HTTP event streams and native terminal WebSockets. Authorization is reserved for the client token. Files images, PDF, audio, video and font previews and prepared chat images load through header-aware HTTP. Files media is buffered up to the existing 10 MiB file-open limit, with a 30-second read deadline. HTML previews and inline Markdown video still use browser URLs and can fail behind a header-protected proxy.
 - The Terminal workspace surface runs its PTY on the active OpenChamber server over the shared authenticated runtime transport; it never opens a local shell on the phone or tablet. Closing the surface detaches the renderer while the server session remains available for reattachment. On touch devices, dragging scrolls the buffer while long-pressing and dragging selects terminal text. The terminal toolbar's Paste button reads the clipboard: iOS through the web Clipboard API, which shows the system Paste bubble first; Android through the app-local `ClipboardText` plugin (`android/app/src/main/java/com/openchamber/app/ClipboardTextPlugin.java`, registered in `MainActivity`), because Android WebView rejects `navigator.clipboard.readText()` and has no prompt to grant it.
-- iOS 18 and later offer a "New OpenChamber Session" action in Shortcuts and Siri (`ios/App/App/OpenChamberAppShortcuts.swift`). It takes an optional project and an optional message: it opens the app on a new session draft in that project, or where the user last worked, and sends the message as the first one once the project's models and agents are loaded. The project picker lists the projects the app last wrote into the widget snapshot (`packages/ui/src/apps/mobileWidgetSnapshot.ts`); a project the connected server no longer has opens an unsent draft with the message in the composer. A push from another server resets the snapshot to that server, which leaves the picker empty until the app is opened again. A draft whose composer already holds text, files or attached context gets the message appended and sends nothing. The request reaches the page through the app-local `ShortcutRequests` plugin (`ShortcutRequests.swift`, `packages/ui/src/lib/nativeShortcutRequests.ts`), never through an `openchamber://` link, because any app or web page can open a link and a link must not send a prompt.
+- iOS 18 and later offer a "New OpenChamber Session" action in Shortcuts and Siri (`ios/App/App/OpenChamberAppShortcuts.swift`). It takes an optional project and an optional message: it opens the app on a new session draft in that project, or where the user last worked, and sends the message as the first one once the project's models and agents are loaded. The project picker lists the projects the app last wrote into the widget snapshot (`packages/ui/src/apps/mobileWidgetSnapshot.ts`); a project the connected server no longer has opens an unsent draft with the message in the composer. A push from another server resets the snapshot to that server, which leaves the picker empty until the app is opened again. A draft whose composer already holds text, files or attached context gets the message appended and sends nothing. The request reaches the page through the app-local `ShortcutRequests` plugin (`ShortcutRequests.swift`), never through an `openchamber://` link, because any app or web page can open a link and a link must not send a prompt.
 - Downloads (file viewer, saved message images) open the native share sheet instead of a browser download, because a WebView has no download manager. iOS uses the Web Share API; Android WebView lacks it, so Android goes through the app-local `FileShare` plugin (`android/app/src/main/java/com/openchamber/app/FileSharePlugin.java`, registered in `MainActivity`), which writes the file to the cache directory and shares it through the manifest's `FileProvider`. The shared helper is `packages/ui/src/lib/nativeFileShare.ts`.
 - Image paste on Android goes through the input method, not the page. The IME reads the content types the focused editor declares in `EditorInfo.contentMimeTypes` and refuses an image paste when it finds none, which is why Gboard answers "image paste is not supported here" in a WebView and no paste event ever fires. `android/app/src/main/java/com/openchamber/app/OpenChamberWebView.java` declares image content and hands whatever the IME commits to the page as an `openchamber-native-image-paste` window event; `packages/ui/src/lib/nativeImagePaste.ts` turns that into a file and the composer attaches it the same way it attaches a pasted image. `MainActivity.load()` inflates that WebView in place of Capacitor's own, which is what makes the declaration take effect. The WebView is a single input connection for every editable element, so `ImagePastePlugin` narrows the declaration to the composer on focus and blur, and asks the IME to read it again when the composer takes focus, since the IME reads it at focus time and that can be before the report arrives. The media type comes from the bytes rather than from the clipboard description. Gboard is the only input method confirmed to insert content this way, and Android Chrome refuses the same paste, so a hosted mobile page still cannot do it.
 - The Changes workspace has a top-level Changes / Branch / Commit / Pull Requests selector. Checkout, Sync, staging, and commit controls appear only under Changes. Comparisons show a read-only file list that opens one diff at a time. Their shared source pickers use bottom sheets on phones and anchored popovers on tablets. Commit lists the latest 50 commits of the checked-out branch. Pull Requests shows the published GitHub diff, excluding local edits and unpushed commits, with search and an explicit refresh action. Closing the workspace preserves the current detail and suspends comparison reads; changing repository or instance resets navigation, and a new file link from chat opens the working-tree diff.
@@ -99,20 +99,23 @@ target instead of guessing coordinates.
 
 ## Local Tooling
 
-The default scripts assume the local Homebrew/Xcode paths prepared for this workspace:
+`scripts/with-mobile-env.mjs` resolves toolchain paths per platform, with explicit `DEVELOPER_DIR`, `JAVA_HOME`, `ANDROID_HOME`, and `ANDROID_SDK_ROOT` environment variables always taking precedence:
 
-- Xcode: `/Applications/Xcode.app/Contents/Developer`
-- JDK 21: `/opt/homebrew/opt/openjdk@21`
-- Android SDK: `/opt/homebrew/share/android-commandlinetools`
-
-Override `DEVELOPER_DIR`, `JAVA_HOME`, `ANDROID_HOME`, or `ANDROID_SDK_ROOT` when using a different local setup.
+- **macOS (`darwin`)**:
+  - `DEVELOPER_DIR`: `$DEVELOPER_DIR` → `xcode-select -p` → `/Applications/Xcode.app/Contents/Developer`
+  - `JAVA_HOME`: `$JAVA_HOME` → Homebrew OpenJDK 21 (`/opt/homebrew/opt/openjdk@21`, or `/usr/local/opt/openjdk@21` if installed)
+  - `ANDROID_HOME` / `ANDROID_SDK_ROOT`: `$ANDROID_HOME` → `$ANDROID_SDK_ROOT` → Homebrew `/opt/homebrew/share/android-commandlinetools` (or `~/Library/Android/sdk` if present)
+- **Linux (`linux`)**:
+  - `DEVELOPER_DIR`: left unset unless explicitly provided (iOS builds and Simulator require macOS with Xcode)
+  - `JAVA_HOME`: `$JAVA_HOME` → first existing JDK 21 directory under `/usr/lib/jvm` (`java-21-openjdk-amd64`, `java-21-openjdk-arm64`, `java-21-openjdk`, `temurin-21-jdk*`, `zulu-21`, `jdk-21`) or Linuxbrew; left unset if none exists so `java` on `PATH` or the caller's environment applies
+  - `ANDROID_HOME` / `ANDROID_SDK_ROOT`: `$ANDROID_HOME` → `$ANDROID_SDK_ROOT` → first existing SDK directory (`~/Android/Sdk`, `~/Android/sdk`, `/opt/android-sdk`, `/usr/lib/android-sdk`, or Linuxbrew); left unset if none exists
+- **`PATH`**: prepends `$JAVA_HOME/bin` and `$ANDROID_HOME/platform-tools` when resolved.
 
 Required local tools:
 
-- Xcode with iOS Simulator support.
-- CocoaPods for iOS dependency installation.
-- JDK 21 for Android Gradle builds.
-- Android SDK command-line tools with platform/build-tools 35.
+- JDK 21 for Android Gradle builds (Linux and macOS).
+- Android SDK command-line tools with platform/build-tools 35 (Linux and macOS).
+- Xcode with iOS Simulator support and CocoaPods for iOS builds (macOS only).
 
 ## Cloudflare Access setup
 
@@ -134,13 +137,13 @@ This setup uses a named Cloudflare Tunnel, a hostname such as `oc.example.com`, 
    Accept
    X-Requested-With
    Cache-Control
-   X-OpenCode-Directory
-   X-OpenCode-Directory-Encoding
+   Last-Event-ID
+   X-OpenChamber-Directory
+   X-OpenChamber-Directory-Encoding
    Ngrok-Skip-Browser-Warning
    X-OpenChamber-Surface
    X-OpenChamber-Provider
    X-OpenChamber-Model
-   X-OpenChamber-Part-Shells
    CF-Access-Client-Id
    CF-Access-Client-Secret
    ```

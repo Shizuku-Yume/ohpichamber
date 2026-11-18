@@ -2,12 +2,13 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:tes
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { HistoryPage, JsonValue, Message, ToolResultPart } from '@openchamber/agent-contract';
+import type { Message, TodoPhase, ToolResultPart } from '@openchamber/agent-contract';
 import type { StoreApi } from 'zustand';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { SyncProvider, useDirectoryStore } from '@/sync/sync-context';
 import type { DirectoryStore } from '@/sync/child-store';
-import { deferred, nativeClient, nativeHistory, nativeMessage, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
+import { applyDirectoryEvent, installSessionSnapshot } from '@/sync/event-reducer';
+import { nativeClient, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
 import { I18nProvider } from '@/lib/i18n';
 import { TodoTray } from './TodoTray';
 
@@ -30,7 +31,7 @@ const DIR = '/workspace/project';
 const WORKSPACE_ID = 'workspace-todo';
 const SESSION_ID = 'session-todo-1';
 
-const todoResult = (callId: string, phases: JsonValue, isError = false): ToolResultPart => ({
+const todoResult = (callId: string, phases: TodoPhase[], isError = false): ToolResultPart => ({
   type: 'tool_result',
   partId: `${callId}-result`,
   toolCallId: callId,
@@ -39,7 +40,7 @@ const todoResult = (callId: string, phases: JsonValue, isError = false): ToolRes
   isError,
 });
 
-const assistantTodoMessage = (messageId: string, phases: JsonValue, isError = false): Message => ({
+const assistantTodoMessage = (messageId: string, phases: TodoPhase[], isError = false): Message => ({
   messageId,
   role: 'assistant',
   sessionId: SESSION_ID,
@@ -48,7 +49,7 @@ const assistantTodoMessage = (messageId: string, phases: JsonValue, isError = fa
   parts: [todoResult(`call-${messageId}`, phases, isError)],
 });
 
-const twoPhaseTodos: JsonValue = [
+const twoPhaseTodos: TodoPhase[] = [
   {
     name: 'Discovery',
     tasks: [
@@ -64,7 +65,7 @@ const twoPhaseTodos: JsonValue = [
   },
 ];
 
-const updatedPhases: JsonValue = [
+const updatedPhases: TodoPhase[] = [
   {
     name: 'Discovery',
     tasks: [
@@ -79,7 +80,6 @@ const updatedPhases: JsonValue = [
     ],
   },
 ];
-
 describe('TodoTray integration', () => {
   let host: HTMLElement;
   let root: Root | null = null;
@@ -129,22 +129,18 @@ describe('TodoTray integration', () => {
 
   const tray = () => host.querySelector('[data-testid="todo-tray"]');
 
-  const flush = async () => {
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-  };
-
-  const setMessages = async (messages: Message[], branchVersion = '1') => {
-    const snapshot = nativeSnapshot(SESSION_ID, []);
-    snapshot.branch = { branchId: 'branch-main', branchVersion, leafMessageId: messages.at(-1)?.messageId ?? 'msg-1' };
+  const setTodos = async (todos: TodoPhase[], messages: Message[] = []) => {
+    const snapshot = nativeSnapshot(SESSION_ID, messages);
+    snapshot.todos = todos;
     await act(async () => {
-      directoryStore!.setState({ snapshot: { [SESSION_ID]: snapshot }, message: { [SESSION_ID]: messages } });
+      directoryStore!.setState((prev) => installSessionSnapshot(prev, snapshot));
     });
   };
 
   test('folds to the active item and its progress, and expands to every phase', async () => {
     await renderTray();
     expect(directoryStore).not.toBeNull();
-    await setMessages([assistantTodoMessage('msg-1', twoPhaseTodos)]);
+    await setTodos(twoPhaseTodos);
 
     const tray = host.querySelector('[data-testid="todo-tray"]');
     expect(tray).not.toBeNull();
@@ -172,7 +168,7 @@ describe('TodoTray integration', () => {
 
   test('remount preserves two-phase history without loss', async () => {
     await renderTray();
-    await setMessages([assistantTodoMessage('msg-1', twoPhaseTodos)]);
+    await setTodos(twoPhaseTodos);
     expect(host.querySelector('[data-testid="todo-tray"]')).not.toBeNull();
 
     // Unmount TodoTray while keeping SyncProvider mounted
@@ -187,21 +183,73 @@ describe('TodoTray integration', () => {
     expect(remountedTray?.textContent).toContain('1/3');
   });
 
-  test('reacts to branch update with updated phases', async () => {
+  test('reacts to session.updated todos and clears the tray on todo_auto_clear even when transcript still has todo tool results', async () => {
     await renderTray();
-    const msg1 = assistantTodoMessage('msg-1', twoPhaseTodos);
-    await setMessages([msg1], '1');
+    const historicalMsg = assistantTodoMessage('msg-1', twoPhaseTodos);
+    await setTodos(twoPhaseTodos, [historicalMsg]);
     expect(tray()?.textContent).toContain('1/3');
 
-    const msg2 = assistantTodoMessage('msg-2', updatedPhases);
-    await setMessages([msg1, msg2], '2');
-    // Every task closed: the plan is finished, so the strip leaves the composer.
+    const partiallyUpdatedPhases: TodoPhase[] = [
+      {
+        name: 'Discovery',
+        tasks: [
+          { content: 'Search codebase', status: 'completed' },
+          { content: 'Inspect findings', status: 'completed' },
+        ],
+      },
+      {
+        name: 'Execution',
+        tasks: [
+          { content: 'Apply modifications', status: 'in_progress' },
+        ],
+      },
+    ];
+    await act(async () => {
+      directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+        sessionId: SESSION_ID,
+        epoch: 'epoch-a',
+        sequence: '5',
+        timestamp: 10,
+        type: 'session.updated',
+        todos: partiallyUpdatedPhases,
+      }).state);
+    });
+    expect(tray()?.textContent).toContain('2/3');
+    expect(tray()?.textContent).toContain('Apply modifications');
+
+    // todo_auto_clear projects session.updated { todos: [] }: the tray leaves
+    // even though the historical todo tool_result remains in the transcript.
+    await act(async () => {
+      directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+        sessionId: SESSION_ID,
+        epoch: 'epoch-a',
+        sequence: '6',
+        timestamp: 11,
+        type: 'session.updated',
+        todos: [],
+      }).state);
+    });
+    expect(tray()).toBeNull();
+    expect(directoryStore!.getState().message[SESSION_ID]).toHaveLength(1);
+
+    // Every task closed on session.updated: the tray hides immediately without waiting for todo_auto_clear.
+    await act(async () => {
+      directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+        sessionId: SESSION_ID,
+        epoch: 'epoch-a',
+        sequence: '7',
+        timestamp: 12,
+        type: 'session.updated',
+        todos: updatedPhases,
+      }).state);
+    });
     expect(tray()).toBeNull();
   });
 
-  test('renders null when history has no todo phases or session is null', async () => {
+  test('renders null when snapshot has no todos or session is null, ignoring transcript tool details', async () => {
     await renderTray();
-    await setMessages([]);
+    await setTodos([], [assistantTodoMessage('msg-only-transcript', twoPhaseTodos)]);
+    expect(host.querySelector('[data-testid="todo-tray"]')).toBeNull();
 
     await renderTray(null);
     expect(tray()).toBeNull();
@@ -213,19 +261,19 @@ describe('TodoTray integration', () => {
   test('hides the tray for an empty snapshot and for a phase whose tasks were emptied', async () => {
     await renderTray();
 
-    await setMessages([assistantTodoMessage('empty', [])], '1');
+    await setTodos([]);
     expect(tray()).toBeNull();
 
-    await setMessages([assistantTodoMessage('emptied', [{ name: '间距修正', tasks: [] }])], '2');
+    await setTodos([{ name: '间距修正', tasks: [] }]);
     expect(tray()).toBeNull();
 
-    await setMessages([assistantTodoMessage('all-empty', [{ name: 'A', tasks: [] }, { name: 'B', tasks: [] }])], '3');
+    await setTodos([{ name: 'A', tasks: [] }, { name: 'B', tasks: [] }]);
     expect(tray()).toBeNull();
   });
 
   test('counts only the real tasks of a mixed empty and populated snapshot', async () => {
     await renderTray();
-    await setMessages([assistantTodoMessage('mixed', [
+    await setTodos([
       { name: 'Emptied phase', tasks: [] },
       {
         name: 'Real work',
@@ -234,7 +282,7 @@ describe('TodoTray integration', () => {
           { content: 'Still running', status: 'in_progress' },
         ],
       },
-    ])]);
+    ]);
 
     const strip = tray();
     expect(strip).not.toBeNull();
@@ -246,20 +294,20 @@ describe('TodoTray integration', () => {
 
   test('hides the tray when completed and abandoned tasks are all that is left', async () => {
     await renderTray();
-    await setMessages([assistantTodoMessage('closed', [
+    await setTodos([
       { name: 'Plan', tasks: [{ content: 'Shipped', status: 'completed' }, { content: 'Dropped', status: 'abandoned' }] },
       { name: 'Aftermath', tasks: [] },
-    ])]);
+    ]);
 
     expect(tray()).toBeNull();
   });
 
   test('keeps the tray while one task is still in progress after its siblings closed', async () => {
     await renderTray();
-    await setMessages([assistantTodoMessage('one-open', [
+    await setTodos([
       { name: 'Plan', tasks: [{ content: 'Shipped', status: 'completed' }, { content: 'Dropped', status: 'abandoned' }] },
       { name: 'Now', tasks: [{ content: 'Keep working', status: 'in_progress' }] },
-    ])]);
+    ]);
 
     const strip = tray();
     expect(strip).not.toBeNull();
@@ -269,9 +317,9 @@ describe('TodoTray integration', () => {
 
   test('names a blocked task in the folded row while the tray stays visible', async () => {
     await renderTray();
-    await setMessages([assistantTodoMessage('blocked', [
+    await setTodos([
       { name: 'Plan', tasks: [{ content: 'Wait on upstream fix', status: 'blocked' }] },
-    ])]);
+    ]);
 
     const strip = tray();
     expect(strip).not.toBeNull();
@@ -279,70 +327,5 @@ describe('TodoTray integration', () => {
     // rather than render the empty header and 0/0 of a finished plan.
     expect(strip?.textContent).toContain('Wait on upstream fix');
     expect(strip?.textContent).toContain('0/1');
-  });
-
-  test('follows a branch switch away from a plan without a todo result and back again', async () => {
-    await renderTray();
-    await setMessages([assistantTodoMessage('plan-a', twoPhaseTodos)], '1');
-    expect(tray()?.textContent).toContain('Inspect findings');
-
-    await setMessages([], '2');
-    expect(tray()).toBeNull();
-
-    await setMessages([assistantTodoMessage('plan-a', twoPhaseTodos)], '3');
-    expect(tray()?.textContent).toContain('Inspect findings');
-    expect(tray()?.textContent).toContain('1/3');
-  });
-
-  test('cold read shows no card while loading and hides the tray when the full history ends cleared', async () => {
-    const tail = Array.from({ length: 10 }, (_, index) => nativeMessage(SESSION_ID, `tail-${index}`, index + 10, 'user'));
-    const snapshot = nativeSnapshot(SESSION_ID, tail);
-    snapshot.window.hasEarlier = true;
-    snapshot.branch = { branchId: 'branch-main', branchVersion: '1', leafMessageId: tail.at(-1)!.messageId };
-    const olderPage = deferred<HistoryPage>();
-    const client = nativeClient({
-      getSnapshot: async () => snapshot,
-      getHistory: async (_sessionId, options) => options?.cursor ? olderPage.promise : nativeHistory(tail, 'older', snapshot),
-    });
-
-    await renderTray(SESSION_ID, DIR, true, client);
-    await setMessages(tail);
-    await flush();
-
-    // The loaded tail carries no todo result; nothing may render while the
-    // older page is still in flight.
-    expect(host.querySelector('[data-testid="todo-card"]')).toBeNull();
-    expect(tray()).toBeNull();
-
-    olderPage.resolve(nativeHistory([assistantTodoMessage('cleared', [])], null, snapshot));
-    await flush();
-
-    expect(host.querySelector('[data-testid="todo-card"]')).toBeNull();
-    expect(tray()).toBeNull();
-    expect((directoryStore!.getState().message[SESSION_ID] ?? []).some((message) => message.messageId === 'cleared')).toBe(true);
-  });
-
-  test('cold read surfaces the plan once the full history delivers an open task', async () => {
-    const tail = Array.from({ length: 10 }, (_, index) => nativeMessage(SESSION_ID, `tail-${index}`, index + 10, 'user'));
-    const snapshot = nativeSnapshot(SESSION_ID, tail);
-    snapshot.window.hasEarlier = true;
-    snapshot.branch = { branchId: 'branch-main', branchVersion: '1', leafMessageId: tail.at(-1)!.messageId };
-    const olderPage = deferred<HistoryPage>();
-    const client = nativeClient({
-      getSnapshot: async () => snapshot,
-      getHistory: async (_sessionId, options) => options?.cursor ? olderPage.promise : nativeHistory(tail, 'older', snapshot),
-    });
-
-    await renderTray(SESSION_ID, DIR, true, client);
-    await setMessages(tail);
-    await flush();
-    expect(tray()).toBeNull();
-
-    olderPage.resolve(nativeHistory([assistantTodoMessage('plan', twoPhaseTodos)], null, snapshot));
-    await flush();
-
-    expect((directoryStore!.getState().message[SESSION_ID] ?? []).some((message) => message.messageId === 'plan')).toBe(true);
-    expect(tray()?.textContent).toContain('Inspect findings');
-    expect(tray()?.textContent).toContain('1/3');
   });
 });

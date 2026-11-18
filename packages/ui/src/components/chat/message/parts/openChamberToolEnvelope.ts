@@ -357,74 +357,6 @@ export const hasOpenChamberView = (envelope: OpenChamberEnvelope): boolean => {
   const schema = VIEW_SCHEMAS.get(envelope.action);
   return schema ? schema.safeParse(envelope.data).success : false;
 };
-const secretRunSchema = z.object({
-  answer: z.union([
-    z.object({
-      status: z.literal('ran'),
-      outcome: z.enum(['exited', 'timeout', 'killed', 'not-started']).catch('killed'),
-      exitCode: z.number().int().nullable().catch(null),
-    }),
-    z.object({ status: z.literal('declined') }),
-    z.object({ answered: z.literal(false) }),
-  ]),
-  stdout: z.string().optional().catch(undefined),
-  stderr: z.string().optional().catch(undefined),
-  error: z.string().optional().catch(undefined),
-});
-
-type SecretRunVerbKey =
-  | 'chat.toolPart.openchamber.action.secretRun'
-  | 'chat.toolPart.openchamber.action.secretRunFailed'
-  | 'chat.toolPart.openchamber.action.secretRunTimedOut'
-  | 'chat.toolPart.openchamber.action.secretRunNotStarted'
-  | 'chat.toolPart.openchamber.action.secretRunStopped'
-  | 'chat.toolPart.openchamber.action.secretRunDeclined'
-  | 'chat.toolPart.openchamber.action.secretRunNotRun'
-  | 'chat.toolPart.openchamber.action.secretRequestSaved'
-  | 'chat.toolPart.openchamber.action.secretRequestDeclined'
-  | 'chat.toolPart.openchamber.action.secretRequestNotGiven';
-
-const secretRequestSchema = z.object({
-  answer: z.union([
-    z.object({ status: z.literal('saved'), file: z.string().optional().catch(undefined) }),
-    z.object({ status: z.literal('declined') }),
-    z.object({ answered: z.literal(false) }),
-  ]),
-});
-
-/**
- * How a finished secret tool call reads in its row. For `secret.run`: the
- * verb (with the exit code when it was not 0) and what the command printed as
- * the agent got it, stdout, stderr, then why it did not finish, values
- * already replaced by the server. For `secret.request`: the verb, and the file
- * a saved value went to. `null` for any other answer.
- */
-export const secretRowView = (
-  envelope: Pick<OpenChamberEnvelope, 'ok' | 'action'> & { data?: unknown } | null,
-): { key: SecretRunVerbKey; code?: number; output?: string; file?: string } | null => {
-  if (envelope?.ok !== true) return null;
-  if (envelope.action === 'secret.request') {
-    const request = secretRequestSchema.safeParse(envelope.data);
-    if (!request.success) return null;
-    const { answer } = request.data;
-    if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRequestNotGiven' };
-    if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRequestDeclined' };
-    return { key: 'chat.toolPart.openchamber.action.secretRequestSaved', file: answer.file };
-  }
-  if (envelope.action !== 'secret.run') return null;
-  const parsed = secretRunSchema.safeParse(envelope.data);
-  if (!parsed.success) return null;
-  const { answer, stdout = '', stderr = '', error = '' } = parsed.data;
-  const output = [stdout, stderr, error].map((part) => part.trimEnd()).filter(Boolean).join('\n');
-  if ('answered' in answer) return { key: 'chat.toolPart.openchamber.action.secretRunNotRun', output };
-  if (answer.status === 'declined') return { key: 'chat.toolPart.openchamber.action.secretRunDeclined', output };
-  if (answer.outcome === 'timeout') return { key: 'chat.toolPart.openchamber.action.secretRunTimedOut', output };
-  if (answer.outcome === 'not-started') return { key: 'chat.toolPart.openchamber.action.secretRunNotStarted', output };
-  if (answer.outcome === 'killed' || answer.exitCode === null) return { key: 'chat.toolPart.openchamber.action.secretRunStopped', output };
-  if (answer.exitCode !== 0) return { key: 'chat.toolPart.openchamber.action.secretRunFailed', code: answer.exitCode, output };
-  return { key: 'chat.toolPart.openchamber.action.secretRun', output };
-};
-
 /** The verb key of each OpenChamber tool action, for the row's subtitle once the action succeeded. */
 export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'projects.list': 'chat.toolPart.openchamber.action.projectsList',
@@ -481,12 +413,6 @@ export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'workflow.save': 'chat.toolPart.openchamber.action.workflowSave',
   'workflow.list': 'chat.toolPart.openchamber.action.workflowList',
 } as const;
-
-const VERB_KEYS = new Map(Object.entries(OPENCHAMBER_ACTION_VERB_KEYS));
-
-/** The verb key of an action, or `undefined` for one without a verb. */
-export const openChamberVerbKey = (action: string | undefined) => (action ? VERB_KEYS.get(action) : undefined);
-
 /** What the views read from a call's input, inside `parameters` or beside `action`, as the plugin reads it. */
 const callFields = z.object({
   projectId: text,

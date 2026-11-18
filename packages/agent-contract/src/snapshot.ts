@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CursorSchema, EntityIdSchema } from './primitives.ts';
-import { RuntimeSessionSchema, RunSchema, SessionBranchStateSchema } from './session.ts';
+import { CursorSchema, EntityIdSchema, TimestampSchema } from './primitives.ts';
+import { CompactionMethodSchema, RuntimeSessionSchema, RunSchema, SessionBranchStateSchema, TodoPhaseSchema } from './session.ts';
 import { ModelSelectionSchema } from './catalogs.ts';
 import { MessageSchema, TurnSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
@@ -10,11 +10,19 @@ export const SessionSelectionSchema = z.strictObject({
   /** OMP's persisted configured level, including `auto`. */
   thinkingLevel: z.string().min(1).nullable(),
 });
+export const SessionCompactingSchema = z.strictObject({
+  method: CompactionMethodSchema,
+  reason: z.enum(['threshold', 'overflow', 'idle', 'incomplete']).optional(),
+  startedAt: TimestampSchema,
+});
+export type SessionCompacting = z.infer<typeof SessionCompactingSchema>;
 export const SessionSnapshotSchema = z.strictObject({
   session: RuntimeSessionSchema, cursor: CursorSchema, activeRun: RunSchema.nullable(),
   /** The persisted native selection; absent readers keep the existing selection state. */
   selection: SessionSelectionSchema.optional(),
   branch: SessionBranchStateSchema,
+  compacting: SessionCompactingSchema.nullable().optional(),
+  todos: z.array(TodoPhaseSchema).optional(),
   window: z.strictObject({
     firstTurnId: EntityIdSchema.nullable(), lastTurnId: EntityIdSchema.nullable(),
     firstMessageId: EntityIdSchema.nullable(), lastMessageId: EntityIdSchema.nullable(), hasEarlier: z.boolean(),

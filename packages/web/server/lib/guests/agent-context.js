@@ -1,8 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-import { GUEST_BLOCK_RESERVED_NAMES, isGuestApproved, parseOpenChamberVersion, requestedGuestCapabilities } from '@openchamber/sdk';
+import { GUEST_BLOCK_RESERVED_NAMES, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
 
 import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
 
@@ -12,13 +11,6 @@ import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
  * extension counts, read from the catalog at each use, so a pause takes it
  * all away.
  */
-
-const AUTHORING_SKILL_NAME = 'openchamber-extensions';
-// Not `.md`: the desktop build strips Markdown from `node_modules`, and OpenCode would start without its config.
-const AUTHORING_SKILL_SOURCE = fileURLToPath(new URL('./authoring/skill.txt', import.meta.url));
-
-/** The command that starts extension work; the skill itself stays out of the agent's own reach. */
-export const EXTENSION_AUTHORING_COMMAND = 'new-extension';
 
 const isActive = (guest) => guest.enabled !== false
   && isGuestApproved({ requested: requestedGuestCapabilities(guest), granted: guest.capabilityGrants ?? [] });
@@ -101,35 +93,3 @@ export const createGuestAgentContext = ({ listGuests, instructions, fsPromises =
   return { instructionText, skillDirectories, pluginDirectories };
 };
 
-/**
- * The skill pinned to the running app, so an agent never has to work out which
- * SDK fits it. Canary and Stable publish the SDK at the app's exact version.
- * An engine floor takes `X.Y.Z` only, so a Canary build gives its core version.
- */
-const pinAuthoringSkill = (template, openchamberVersion) => {
-  const core = parseOpenChamberVersion(openchamberVersion);
-  return template
-    .replaceAll('{{sdkVersion}}', core ? openchamberVersion : 'latest')
-    .replaceAll('{{engineFloor}}', core ? `${core.major}.${core.minor}.${core.patch}` : '0.0.0');
-};
-
-/**
- * The extension-writing skill as a file OpenCode can scan, under the instance
- * directory: the packaged source may sit inside an archive OpenCode cannot read.
- * @returns {Promise<{ skillsRoot: string, command: { description: string, template: string } }>}
- */
-export const materializeAuthoringSkill = async ({ fsPromises, instanceDir, openchamberVersion }) => {
-  const skillsRoot = path.join(instanceDir, 'skills');
-  const directory = path.join(skillsRoot, AUTHORING_SKILL_NAME);
-  const target = path.join(directory, 'SKILL.md');
-  await fsPromises.mkdir(directory, { recursive: true });
-  const template = await fsPromises.readFile(AUTHORING_SKILL_SOURCE, 'utf8');
-  await fsPromises.writeFile(target, pinAuthoringSkill(template, openchamberVersion), 'utf8');
-  return {
-    skillsRoot,
-    command: {
-      description: 'Build an OpenChamber extension',
-      template: `Read ${target} and follow it to build this extension:\n\n$ARGUMENTS`,
-    },
-  };
-};

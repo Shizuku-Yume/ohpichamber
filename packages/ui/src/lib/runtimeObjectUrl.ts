@@ -68,7 +68,7 @@ const loadObjectUrl = (key: string, path: string, query: string): Promise<string
   return promise;
 };
 
-export type RuntimeObjectUrl = {
+type RuntimeObjectUrl = {
   url: string | null;
   /** The last fetch for this path and query failed; `url` stays null until they change. */
   failed: boolean;

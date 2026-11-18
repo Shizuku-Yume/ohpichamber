@@ -10,13 +10,12 @@ Do not add a component-level `window` or `document` keydown listener for an appl
 
 Palette commands name their shortcut by schema ID (`shortcutId` is typed as `ShortcutActionId`), so a misspelled ID fails type-check instead of silently showing no shortcut. A command's handler still registers beside its owner; the schema does not hold handlers, so a new command is complete only once its handler exists.
 
-Commands that also have a palette entry share one function with that entry (`lib/paletteCommands.ts`), and `hooks/usePaletteShortcuts.ts` registers their handlers from `MainLayout`. The palette itself loads on demand, so a handler registered inside it would not exist until the first time it opened.
+`CommandPalette` defines its palette entries inline (referencing schema shortcuts via `shortcutId`, or invoking its owning store/action directly when no schema shortcut exists) and loads on demand from `MainLayout`. Keyboard shortcut handlers register via `useKeybind` or `useKeybinds` (such as in `hooks/useKeyboardShortcuts.ts`, mounted by `SyncAppEffects`, or beside the owning component), so chords work before the palette is ever opened.
 
-These commands are a web and desktop feature, and each runtime's root sets the boundary:
+The command palette is a web and desktop feature, and each runtime's root sets the boundary:
 
-- Web and desktop (Electron) mount `MainLayout`, so the palette handlers and the Shortcuts settings page both exist.
-- VS Code mounts `VSCodeApp` and `VSCodeLayout` and never imports `MainLayout` or `CommandPalette`, so the hook and `paletteCommands.ts` stay out of that bundle and the Shortcuts page is unavailable. `SessionSidebar` is shared, and its display handlers decline in VS Code.
-- Hosted mobile and Capacitor mount `MobileApp` through `renderMobileApp`, with no `MainLayout` and no Shortcuts page. Their `SessionSidebar` registers its handlers, and the palette commands do not exist there.
+- Web and desktop (Electron) mount `MainLayout`, so `CommandPalette` and the Shortcuts settings page both exist.
+- Hosted mobile and Capacitor mount `MobileApp` through `renderMobileApp`, with no `MainLayout`, no `CommandPalette`, and no Shortcuts page. `SyncAppEffects` and `SessionSidebar` still register their applicable handlers there.
 
 Configuration must not contain lookup functions, override resolution, event matching, registry state, or runtime handlers. Those concerns belong to the owning modules below. Keeping configuration declarative makes the complete shortcut inventory reviewable without reading execution code.
 

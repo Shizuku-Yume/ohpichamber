@@ -1,6 +1,4 @@
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
-import type { I18nKey, I18nParams } from '@/lib/i18n';
-import { isValidCronExpression } from '@/lib/cron';
 import { canonicalizeTimezone } from '@/lib/timezones';
 
 export type ScheduledTaskDraft = {
@@ -142,51 +140,6 @@ export const toDraft = (
   };
 };
 
-export const validateDraft = (draft: ScheduledTaskDraft, t: (key: I18nKey, params?: I18nParams) => string): string | null => {
-  if (draft.sessionMode === 'existing' && !draft.targetSessionId) return t('sessions.scheduledTasks.editor.targetRequired');
-  if (!draft.name.trim()) {
-    return t('sessions.scheduledTasks.editor.validation.taskNameRequired');
-  }
-  if (!draft.execution.prompt.trim()) {
-    return t('sessions.scheduledTasks.editor.validation.promptRequired');
-  }
-  if (!draft.execution.useDefaults && (!draft.execution.providerID.trim() || !draft.execution.modelID.trim())) {
-    return t('sessions.scheduledTasks.editor.validation.modelRequired');
-  }
-
-  if (draft.schedule.kind === 'once') {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.schedule.onceDate)) {
-      return t('sessions.scheduledTasks.editor.validation.dateFormat');
-    }
-    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(draft.schedule.onceTime)) {
-      return t('sessions.scheduledTasks.editor.validation.timeFormat');
-    }
-  } else if (draft.schedule.kind === 'cron') {
-    if (!draft.schedule.cronExpression.trim()) {
-      return t('sessions.scheduledTasks.editor.validation.cronRequired');
-    }
-    const cronResult = isValidCronExpression(draft.schedule.cronExpression);
-    if (!cronResult.valid) {
-      return t('sessions.scheduledTasks.editor.validation.cronInvalid');
-    }
-  } else {
-    const validTimes = draft.schedule.times.filter((value) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value));
-    if (validTimes.length === 0) {
-      return t('sessions.scheduledTasks.editor.validation.atLeastOneTime');
-    }
-  }
-
-  if (draft.schedule.kind === 'weekly' && draft.schedule.weekdays.length === 0) {
-    return t('sessions.scheduledTasks.editor.validation.atLeastOneWeekday');
-  }
-
-  if (!draft.schedule.timezone.trim()) {
-    return t('sessions.scheduledTasks.editor.validation.timezoneRequired');
-  }
-
-  return null;
-};
-
 const dedupeSortTimes = (times: string[]) => {
   const filtered = times.filter((value) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value));
   return Array.from(new Set(filtered)).sort((a, b) => a.localeCompare(b));
@@ -205,13 +158,13 @@ export const buildScheduledTaskPayload = (draft: ScheduledTaskDraft): Partial<Sc
         ? { cron: draft.schedule.cronExpression.trim() }
         : draft.schedule.kind === 'once'
           ? {
-              date: draft.schedule.onceDate,
-              time: draft.schedule.onceTime,
+            date: draft.schedule.onceDate,
+            time: draft.schedule.onceTime,
           }
           : {
-              times: dedupeSortTimes(draft.schedule.times),
-              ...(draft.schedule.kind === 'weekly' ? { weekdays: draft.schedule.weekdays } : {}),
-            }),
+            times: dedupeSortTimes(draft.schedule.times),
+            ...(draft.schedule.kind === 'weekly' ? { weekdays: draft.schedule.weekdays } : {}),
+          }),
     },
     execution: {
       prompt: draft.execution.prompt,

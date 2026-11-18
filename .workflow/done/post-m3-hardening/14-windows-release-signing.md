@@ -3,7 +3,6 @@
 **Effort:** post-m3-hardening
 **Task type:** feature
 **Base commit:** 2928db64b08e535b309497186508923f77cb4c02
-**Base branch:** post-m3-hardening/27-omp-vendor-runbook
 **Started:** 2026-10-24T12:36:00+08:00
 **Finished:** 2026-10-24T13:05:00+08:00
 

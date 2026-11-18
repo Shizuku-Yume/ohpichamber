@@ -10,7 +10,6 @@ import {
   SettingsInset,
   SettingsChipGroup,
   SETTINGS_WIDTH_NUMBER_CLASS,
-  SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
@@ -21,6 +20,7 @@ import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoal
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { changedRoles, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
+import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
@@ -723,8 +723,9 @@ export const DefaultsSettings: React.FC = () => {
       </SettingsSection>
 
       <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')}>
-        <SettingsInset className={SETTINGS_SPACE_CHECKBOX_CLASS}>
+        <SettingsInset className={SETTINGS_SPACE_ROW_CLASS}>
           <SessionWarmingCheckbox />
+          <SessionWarmingField />
           <SettingsCheckboxRow
             settingsItem="sessions.show-chats"
             checked={showChatsSection}

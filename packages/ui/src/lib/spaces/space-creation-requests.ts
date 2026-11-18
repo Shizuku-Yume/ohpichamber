@@ -11,10 +11,6 @@ export const noteSpaceCreationRequest = (requestId: string, spaceId: string): vo
   spaceRequests.set(requestId, spaceId);
 };
 
-export const forgetSpaceCreationRequest = (requestId: string): void => {
-  spaceRequests.delete(requestId);
-};
-
 /** Forgets the waiting requests; the runtime their spaces were asked of is gone. */
 export const resetSpaceCreationRequests = (): void => {
   spaceRequests.clear();

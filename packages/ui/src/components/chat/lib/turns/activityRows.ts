@@ -11,7 +11,7 @@ export const LIVE_ACTIVITY_VISIBLE_ROWS = 7;
 
 
 /** Whether a tool call gets a row: while it runs, and once it ended with sane timing. */
-export const isToolRowShown = (toolPart: ToolCallPart): boolean => {
+const isToolRowShown = (toolPart: ToolCallPart): boolean => {
     return toolPart.status !== 'cancelled';
 };
 

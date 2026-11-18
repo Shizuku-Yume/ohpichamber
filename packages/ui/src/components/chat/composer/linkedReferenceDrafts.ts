@@ -62,9 +62,4 @@ export const readLinkedReferences = (target: ChatDraftIdentity | null): Composer
     return useLinkedReferenceDrafts.getState().drafts.get(getChatDraftIdentityKey(target)) ?? NO_REFERENCES;
 };
 
-export const useDraftLinkedReferences = (target: ChatDraftIdentity | null): ComposerReference[] => {
-    const key = target ? getChatDraftIdentityKey(target) : null;
-    return useLinkedReferenceDrafts((state) => (key ? state.drafts.get(key) ?? NO_REFERENCES : NO_REFERENCES));
-};
-
 subscribeChatDraftDeletion((identity) => useLinkedReferenceDrafts.getState().clear(identity));

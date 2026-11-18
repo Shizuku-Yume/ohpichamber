@@ -54,7 +54,7 @@ const baseName = (name: string) => name.replace(FONT_STYLE_WORDS, '').replace(/\
  * font-style words (Night Owl's "No Italics" also nudges one token color).
  * The first variant, in the package's own order, stays.
  */
-export function withoutRepeatedPalettes<T extends { status: 'ready'; name: string; definition: ThemeDefinition } | { status: 'invalid' }>(variants: T[]): T[] {
+function withoutRepeatedPalettes<T extends { status: 'ready'; name: string; definition: ThemeDefinition } | { status: 'invalid' }>(variants: T[]): T[] {
   const palettes = new Set<string>();
   const names = new Set<string>();
   return variants.filter((variant) => {

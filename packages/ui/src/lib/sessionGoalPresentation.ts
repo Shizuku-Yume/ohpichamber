@@ -10,13 +10,6 @@ export const sessionGoalStatusColor: Record<SessionGoalStatus, string> = {
   complete: 'var(--status-success)',
 };
 
-export const sessionGoalStatusLabelKey: Record<SessionGoalStatus, string> = {
-  active: 'chat.goal.status.active',
-  paused: 'chat.goal.status.paused',
-  budgetLimited: 'chat.goal.status.budgetLimited',
-  complete: 'chat.goal.status.complete',
-};
-
 /**
  * The sidebar mark's wording, for the lane card that draws the same glyph.
  * A goal the canonical mode cannot report (blocked) has no entry here.

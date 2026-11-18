@@ -1,6 +1,6 @@
 # Full UX restoration, OMP native parity, and performance remediation (24-point review)
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** ux-and-omp-parity-remediation/integration
 

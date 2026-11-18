@@ -20,7 +20,7 @@ import { useTerminalStore } from '@/stores/useTerminalStore';
 import { PROJECT_ACTION_ICONS } from '@/lib/projectActions';
 import { shownContextModes } from '@/lib/workspace/zones';
 
-export interface HeaderTerminalActionProps {
+interface HeaderTerminalActionProps {
   directory: string | null | undefined;
   className?: string;
 }

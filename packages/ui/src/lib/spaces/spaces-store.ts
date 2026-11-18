@@ -285,16 +285,6 @@ const isStoppedEntry = (entry: SpaceEntry | undefined): boolean => entry?.state 
 const isSpaceStopped = (spaceId: string): boolean => isStoppedEntry(useSpacesStore.getState().journey?.get(spaceId));
 
 /**
- * Whether a space's group offers Delete and nothing else: its making failed, here or in a host
- * that quit before the code arrived, or its container is gone. A new session there would open
- * in an empty folder or fail, so the group's "Start a session" stays hidden.
- */
-export const spaceTakesNoNewSession = (entry: SpaceEntry | undefined): boolean => entry?.state === 'failed' || entry?.state === 'missing';
-
-export const useSpaceTakesNoNewSession = (spaceId: string | null | undefined): boolean =>
- useSpacesStore((state) => spaceId != null && spaceTakesNoNewSession(state.journey?.get(spaceId)));
-
-/**
  * The host project a space's directory belongs to: the registered project the space was made
  * from, as the session list's mark or the journey list names it. Null for a host directory, for a
  * space this window does not know yet, and for one whose project the host no longer has.

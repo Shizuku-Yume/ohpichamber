@@ -92,6 +92,8 @@ const AGENT_ROUTES = [
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/subagents$/, response: C.SubagentListResponseSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/subagents\/tree-cost$/, response: C.SubagentTreeCostResponseSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/subagents\/(?<subagentId>[^/]+)\/transcript$/, response: C.SubagentTranscriptResponseSchema },
+ { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/cache-warming$/, response: C.SessionCacheWarmingStateSchema },
+ { method: 'PUT', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/cache-warming$/, request: C.SessionCacheWarmingUpdateRequestSchema, response: C.SessionCacheWarmingApplyResultSchema, coldSessionMutation: true },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/history$/, response: C.HistoryPageSchema, query: ['cursor', 'leafTurnId', 'limit'] },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/events$/, stream: true, query: ['cursor'] },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/runs\/[^/]+\/abort$/, response: RunResponseSchema },
@@ -328,7 +330,7 @@ export function registerCanonicalHostRoutes(app, {
    // Reads go straight to the cold projection. Only a mutating session
    // operation needs a worker, so this is the one place a canonical route
    // starts one.
-   if (groups?.sessionId && req.method !== 'GET' && !route.shellObservation && scope) {
+   if (groups?.sessionId && req.method !== 'GET' && !route.shellObservation && !route.coldSessionMutation && scope) {
     const sessionId = C.EntityIdSchema.parse(decodeURIComponent(groups.sessionId));
     const bootstrap = {
      rootSessionId: scope.rootSessionId ?? sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId,
@@ -450,6 +452,11 @@ export function registerCanonicalHostRoutes(app, {
     return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The agent response does not match its selected workspace.');
    if (route.response === C.CacheWarmingApplyResultSchema && (!scope || result.persisted.workspaceId !== scope.workspaceId || result.workers.some(outcome => outcome.worker.workspaceId !== scope.workspaceId)))
     return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The cache-warming response does not match its selected workspace.');
+   const expectedRootId = scope?.rootSessionId ?? (groups?.sessionId ? decodeURIComponent(groups.sessionId) : undefined);
+   if (route.response === C.SessionCacheWarmingStateSchema && (!scope || result.workspaceId !== scope.workspaceId || result.sessionId !== expectedRootId))
+    return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The session cache-warming response does not match its selected session.');
+   if (route.response === C.SessionCacheWarmingApplyResultSchema && (!scope || result.persisted.workspaceId !== scope.workspaceId || result.persisted.sessionId !== expectedRootId || (result.worker !== null && (result.worker.worker.workspaceId !== scope.workspaceId || result.worker.worker.rootSessionId !== expectedRootId))))
+    return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The session cache-warming response does not match its selected session.');
    if (route.websearch && (!scope || (result.state?.workspaceId ?? result.workspaceId) !== scope.workspaceId))
     return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The search response does not match its selected workspace.');
    if (route.mcpOAuth) {

@@ -1,5 +1,5 @@
 export { QUOTA_PROVIDERS, type QuotaProviderMeta } from './providers';
-export { isExtensionQuotaProviderId, quotaProviderList } from './extensionProviders';
+export { isExtensionQuotaProviderId } from './extensionProviders';
 export {
   clampPercent,
   formatQuotaValueLabel,

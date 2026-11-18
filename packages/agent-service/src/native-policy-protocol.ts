@@ -28,7 +28,7 @@ export const NativePolicyContextSchema = z.strictObject({
   providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
 });
 export type NativePolicyContext = z.infer<typeof NativePolicyContextSchema>;
-export const NativeApprovalGrantSchema = ApprovalGrantSchema;
+const NativeApprovalGrantSchema = ApprovalGrantSchema;
 export type NativeApprovalGrant = ApprovalGrant;
 export const NativeLspActionSchema = z.enum([
   'diagnostics',

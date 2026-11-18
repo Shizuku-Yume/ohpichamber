@@ -162,6 +162,8 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `GET` | `/api/agent/v1/sessions/:sessionId/skills/catalog` | Addressed root worker's installed-source revisions and active skill catalog | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/apply` | Apply installed workspace or selected-agent source revision across affected roots | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/expand` | Expand from addressed root worker's generation/catalog; does not submit a prompt | Required | Yes | JSON |
+| `GET` | `/api/agent/v1/sessions/:sessionId/cache-warming` | Root session prompt-cache warming state, workspace default, and effective mode | Required | Yes | JSON |
+| `PUT` | `/api/agent/v1/sessions/:sessionId/cache-warming` | Persist root session warming override (`null` inherits workspace) and report per-session apply outcome | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/shell/jobs` | Start a worker-local Shell job | Required | No | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/shell/jobs` | Authorized session-tree Shell snapshot | Required | Yes | JSON |
 | `GET` | `/api/agent/v1/workspaces/:workspaceId/shell/jobs` | Authorized workspace Shell snapshot | Required | Yes | JSON |
@@ -281,7 +283,7 @@ Standard error codes:
 | Durable delivery | `queue.ts` | Host revision and ordered queued/leased items; immutable captured delivery configuration |
 | Provider, model, MCP and skill catalogs | `catalogs.ts` | Configuration/source revisions separate from per-root applied revisions; explicit mutation and partial-failure results |
 | Provider accounts, OAuth and custom discovery | `provider-management.ts` | Non-secret account roster and labels; native login-method identity; private OAuth flow/generation; custom header names and model discovery |
-| Cache warming | `warming.ts` | Workspace mode and revision; generation-qualified per-root outcomes; typed partial-write details |
+| Cache warming | `warming.ts` | Workspace mode and revision; per-session nullable override, revision and effective mode; generation-qualified apply outcomes; typed partial-write details |
 | Commands, prompt templates and authored skills | `file-resources.ts` | Selected-agent catalog revision; independent Host skill source revision; exact Markdown and canonical bindings |
 | Skill repositories | `skill-repositories.ts` | Trusted source catalog; authorized scan selections; committed install outcomes and structured conflicts |
 | Plugins and local extensions | `plugins.ts` | Native plugin-root revision; package/marketplace targets; global settings; explicit idle-restart outcomes |
@@ -311,7 +313,7 @@ These route families are present in current source. They share Host authenticati
 |---|---|---|---|
 | Native agent controls | `/workspaces/:workspaceId/agents` | `session.ts`, `catalogs.ts` | Task 46 |
 | Provider accounts, OAuth, custom configuration | `/workspaces/:workspaceId/providers/...` | `provider-management.ts`, `catalogs.ts` | Task 49 |
-| Cache warming | `/workspaces/:workspaceId/cache-warming` | `warming.ts` | Task 50 |
+| Cache warming | `/workspaces/:workspaceId/cache-warming`, `/sessions/:sessionId/cache-warming` | `warming.ts` | Task 50, tech-debt-sweep/06 |
 | Commands, prompt templates, authored skills, skill repositories | `/workspaces/:workspaceId/{commands,prompt-templates,skills/...}` | `file-resources.ts`, `skill-repositories.ts`, `catalogs.ts` | Task 51 |
 | Plugins and local extensions | `/workspaces/:workspaceId/plugins/...` | `plugins.ts` | Task 52 |
 | Web search | `/workspaces/:workspaceId/web-search...` | `websearch.ts` | Task 53 |
@@ -333,6 +335,8 @@ Custom providers use `GET/PUT .../providers/:providerId/config` with `ProviderCo
 ### Cache warming
 
 `GET/PUT .../cache-warming` use `CacheWarmingState`, `CacheWarmingUpdateRequest` and `CacheWarmingApplyResult` at the catalog revision owned by the workspace's selected agent directory. `mode` is `off`, `streaming` or `idle`. `PUT` persists the mode first, then applies it to live root workers and reports generation-qualified `applied`/`failed` outcomes with aggregate `applied`, `partial`, `failed` or `no-active-workers`. Stopped roots are not started for fanout, and a stateless configuration worker is not execution proof. Configured mode is not proof that a request ran or a cache entry was reused. Session startup reapplies the latest effective workspace mode; live application uses a session override and does not rewrite configuration. Native scheduling and provider traffic stay in the SDK; no Host or UI keep-alive loop exists. If the native settings flush succeeds but the service revision commit fails, the response is HTTP 503 `SERVICE_UNAVAILABLE` with `CacheWarmingPartialWriteDetails`: the native configuration remains saved, the previous service revision is retained, and live application is `not-started`. The system does not claim atomic rollback across those two files.
+
+`GET/PUT /api/agent/v1/sessions/:sessionId/cache-warming` address an admitted root session (child sessions resolve to their `rootSessionId`) using `SessionCacheWarmingState`, `SessionCacheWarmingUpdateRequest`, and `SessionCacheWarmingApplyResult`. `SessionCacheWarmingState` carries `{ sessionId, workspaceId, revision, mode, workspaceMode, effectiveMode }` where `mode` is `CacheWarmingMode | null` (`null` inherits the workspace `CacheWarmingMode`), `revision` is a decimal uint64 counter starting at `"0"` for unconfigured sessions, and `effectiveMode = mode ?? workspaceMode`. Under the precedence rule, an explicit non-null per-session `mode` (`'off'`, `'streaming'`, or `'idle'`) overrides `workspaceMode` for that session, including during subsequent workspace `PUT .../cache-warming` fanout and worker startup/reopen; clearing `mode` to `null` restores inheritance of `workspaceMode`. `PUT` enforces `expectedRevision` CAS (`409 CATALOG_CONFLICT` with `{ currentRevision }` on mismatch), durably persists the per-session override on the Agent Service before live application, and clears the record when the session is deleted (ordinary delete, cold archive delete, or worktree archive delete). `SessionCacheWarmingApplyResult` reports `{ persisted: SessionCacheWarmingState, status: 'applied' | 'failed' | 'no-active-worker', worker: CacheWarmingWorkerApplyOutcome | null }`. Cold sessions persist without starting a worker (`status: 'no-active-worker'`, `worker: null`); live root workers apply `effectiveMode` through OMP's native `AgentSession.setCacheWarmingMode` with no Host-side timer or ping loop. An idle session worker whose effective mode is `'idle'` or `'streaming'` is retained against background idle eviction while warming is active.
 
 ### Commands, prompt templates and authored skills
 

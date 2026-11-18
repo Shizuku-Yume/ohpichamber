@@ -35,7 +35,7 @@ const toGitRemoteSummary = (remote) => ({
 const toLocationKey = (directory) => String(directory || '').replace(/\\/g, '/').replace(/\/+$/, '');
 const WORKTREE_INSTANCE_DISPOSE_TIMEOUT_MS = 5000;
 
-export const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
+const createWorktreeInstanceDisposer = ({ buildOpenCodeUrl, getOpenCodeAuthHeaders }) => {
   return async (worktreeDirectory) => {
     if (!buildOpenCodeUrl || !getOpenCodeAuthHeaders) return;
     const root = toLocationKey(worktreeDirectory);

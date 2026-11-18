@@ -36,13 +36,6 @@ export function clearSessionAdvisor(state: State, sessionId: string): State {
  delete advisor[sessionId];
  return { ...state, advisor };
 }
-
-export function clearSessionCleanse(state: State, sessionId: string): State {
- if (!state.cleanse?.[sessionId]) return state;
- const cleanse = { ...state.cleanse };
- delete cleanse[sessionId];
- return { ...state, cleanse };
-}
 const retain = <T>(current: readonly T[], incoming: readonly T[], key: (item: T) => string): T[] => {
  const prior = new Map(current.map((item) => [key(item), item]))
  const next = incoming.map((item) => { const old = prior.get(key(item)); return old && same(old, item) ? old : item })
@@ -480,6 +473,8 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
    if (event.continuationPending !== undefined) updated = { ...updated, session: { ...updated.session, continuationPending: event.continuationPending } }
    if (event.title !== undefined) updated = { ...updated, session: { ...updated.session, title: event.title } }
    if (event.selection !== undefined) updated = { ...updated, selection: event.selection }
+   if (event.compacting !== undefined) updated = { ...updated, compacting: event.compacting }
+   if (event.todos !== undefined) updated = { ...updated, todos: event.todos }
    if (event.loop !== undefined) updated = { ...updated, session: { ...updated.session, loop: event.loop } }
    const current = next.session.find((session) => session.sessionId === id)
    if (current) {

@@ -11,7 +11,7 @@ export const hasTodoTasks = (phases: readonly TodoPhase[]): boolean =>
 export const hasOpenTodo = (phases: readonly TodoPhase[]): boolean =>
     phases.some((phase) => phase.tasks.some((task) => !isClosedTodo(task)));
 
-export interface TodoProgress {
+interface TodoProgress {
     closed: number;
     total: number;
 }

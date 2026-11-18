@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
+import { statSync } from 'node:fs';
+import { mkdir, open, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
@@ -16,6 +17,7 @@ import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agen
 import { filterAvailableModelsByEnabledPatterns, getModelMatchPreferences, pickDefaultAvailableModel, resolveAllowedModels, resolveModelRoleValue } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { resolveRoleModelFull } from '@oh-my-pi/pi-coding-agent/session/role-models';
+import { cfgCompactionModelThresholds, cfgCompactionModelThresholdsEnabled, cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
 import { isDiscoveryBearerApiKey } from '@oh-my-pi/pi-coding-agent/config/model-provider-discovery';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
@@ -321,8 +323,88 @@ export class NativeModels {
  private readonly catalogCache = new Map<'models' | 'providers', { key: string; catalog: ModelCatalog | ProviderCatalog }>();
  /** The native configuration `load()` last read, so a cached read needs no second file pass. */
  private currentConfig: ConfigState['config'] = {};
+ private readonly modelsFile;
+ /**
+  * Policy state key last applied via `modelRegistry.reapplyModelPolicies()` or
+  * confirmed after `modelRegistry.refresh('offline')` via `markPoliciesApplied()`.
+  * Starts null so an unrefreshed `ModelRegistry` still hydrates once on first
+  * use, and clears during/after failed rebuilds so retries run.
+  */
+ private appliedPolicyKey: string | null = null;
+ private inFlightPolicySync: { key: string; promise: Promise<void> } | null = null;
  constructor(private readonly context: NativeModelsContext) {
   if (context.modelRegistry.authStorage !== context.authStorage) throw new Error('Catalog registry and credential storage must share ownership');
+  this.modelsFile = ModelsConfigFile.relocate(context.modelsPath);
+ }
+
+ markPoliciesApplied(): void {
+  this.appliedPolicyKey = this.policyState();
+ }
+ private modelsFileStamp(): string {
+  const filePath = this.modelsFile.path();
+  try {
+   const info = statSync(filePath, { bigint: true });
+   return `${filePath}:${info.ino}:${info.mtimeNs}:${info.size}`;
+  } catch {
+   // An absent models file is a state of its own, and `load()` has already
+   // resolved it; the stamp only has to change when the file appears.
+   return `${filePath}:absent`;
+  }
+ }
+
+ /**
+  * Inputs that `modelRegistry.reapplyModelPolicies()` depends on: the native
+  * models file, credential pool generation, and policy settings.
+  */
+ private policyState(): string {
+  const settings = this.context.settings;
+  return JSON.stringify([
+   this.modelsFileStamp(),
+   this.context.authStorage.credentials.generation,
+   cfgDisabledProviders.get(settings),
+   cfgExtendedContext.get(settings),
+   cfgCompactionModelThresholdsEnabled.get(settings) ? cfgCompactionModelThresholds.get(settings) : undefined,
+  ]);
+ }
+
+ private async syncModelPolicies(): Promise<void> {
+  while (true) {
+   const key = this.policyState();
+   if (this.inFlightPolicySync) {
+    if (this.inFlightPolicySync.key === key) {
+     return await this.inFlightPolicySync.promise;
+    }
+    await this.inFlightPolicySync.promise.catch(() => { });
+    continue;
+   }
+   if (this.appliedPolicyKey === key) return;
+   this.appliedPolicyKey = null;
+   const promise = (async () => {
+    await this.context.modelRegistry.reapplyModelPolicies();
+    if (this.policyState() === key) {
+     this.appliedPolicyKey = key;
+    }
+   })();
+   this.inFlightPolicySync = { key, promise };
+   try {
+    await promise;
+    return;
+   } finally {
+    if (this.inFlightPolicySync?.promise === promise) {
+     this.inFlightPolicySync = null;
+    }
+   }
+  }
+ }
+
+ async ensurePoliciesCurrent(): Promise<void> {
+  await this.load();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
+ }
+
+ private async reloadCredentials(): Promise<void> {
+  await this.context.authStorage.credentials.poll();
  }
 
  /**
@@ -332,21 +414,13 @@ export class NativeModels {
   */
  private async catalogState(): Promise<string> {
   await this.load();
-  await this.context.authStorage.credentials.reload();
-  let stamp = 'absent';
-  try {
-   const info = await stat(ModelsConfigFile.relocate(this.context.modelsPath).path());
-   stamp = `${info.mtimeMs}:${info.size}`;
-  } catch {
-   // An absent models file is a state of its own, and `load()` has already
-   // resolved it; the stamp only has to change when the file appears.
-  }
+  await this.reloadCredentials();
   // The settings revision moves on every reload even when nothing changed, so
   // the key uses the values a catalog actually reads instead.
   const settings = this.context.settings;
   return JSON.stringify([
-   stamp, this.context.authStorage.credentials.generation,
-   cfgEnabledModels.get(settings), cfgDisabledProviders.get(settings),
+   this.policyState(),
+   cfgEnabledModels.get(settings),
    cfgDefaultThinkingLevel.get(settings), settings.getModelRole('default'), settings.getModelRole('plan'),
    getModelMatchPreferences(settings),
   ]);
@@ -355,7 +429,7 @@ export class NativeModels {
  private async load(): Promise<ConfigState> {
   try { await this.context.settings.reloadFromDisk(); }
   catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings could not be read'); }
-  const file = ModelsConfigFile.relocate(this.context.modelsPath);
+  const file = this.modelsFile;
   file.invalidate();
   const loaded = file.tryLoad();
   if (loaded.status === 'error') throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native model configuration could not be read');
@@ -379,7 +453,7 @@ export class NativeModels {
   const cacheKey = `models|${workspaceId}|${revision}|${state}`;
   const cached = this.catalogCache.get('models');
   if (cached?.key === cacheKey) return structuredClone(cached.catalog as ModelCatalog);
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.syncModelPolicies();
   // A model is listed only when its provider can execute: configured
   // models.yml entries (including keyless endpoints), stored/environment/
   // oauth credentials, or native keyless local providers. The full bundled
@@ -449,7 +523,7 @@ export class NativeModels {
   const cacheKey = `providers|${workspaceId}|${revision}|${state}`;
   const cached = this.catalogCache.get('providers');
   if (cached?.key === cacheKey) return structuredClone(cached.catalog as ProviderCatalog);
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.syncModelPolicies();
   const ids = new Set([
    ...this.context.modelRegistry.getAll('all').map(model => model.provider),
    ...Object.keys(this.currentConfig.providers ?? {}), ...Object.keys(this.metadata.providers),
@@ -470,7 +544,8 @@ export class NativeModels {
 
  async readProviderConfiguration(providerId: string, revision: string): Promise<ProviderConfigurationRead> {
   const state = await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   const provider = this.provider(providerId);
   const configuration = state.metadata.providers[providerId] ?? {
    providerId, name: provider.name, endpoint: provider.endpoint, protocol: provider.protocol,
@@ -801,8 +876,8 @@ export class NativeModels {
  async generate(input: ImageGenerateRequest, signal?: AbortSignal): Promise<ImageGenerateResult> {
   const request = ImageGenerateRequestSchema.parse(input);
   await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
-  await this.context.authStorage.credentials.reload();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   const { providerId, modelId } = request.selection;
   const key = modelKey(request.selection);
   const configured = this.metadata.imageModels[key];
@@ -849,10 +924,8 @@ export class NativeModels {
 
  async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
   await this.load();
-  await Promise.all([
-   this.context.modelRegistry.reapplyModelPolicies(),
-   this.context.authStorage.credentials.reload(),
-  ]);
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   if (cfgDisabledProviders.get(this.context.settings).includes(input.providerId)) {
    throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider is disabled');
   }
@@ -919,7 +992,7 @@ export class NativeModels {
    published = true;
    project();
    await this.context.settings.flush();
-   await this.context.modelRegistry.reapplyModelPolicies();
+   await this.syncModelPolicies();
    this.metadata = state.metadata;
    return result();
   } catch (error) {
@@ -929,7 +1002,7 @@ export class NativeModels {
      cfgEnabledModels.set(this.context.settings, oldEnabled);
      cfgDisabledProviders.set(this.context.settings, oldDisabled);
      await this.context.settings.flush();
-     await this.context.modelRegistry.reapplyModelPolicies();
+     await this.syncModelPolicies();
      this.metadata = oldMetadata;
     } catch {
      throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native catalog mutation failed and previous configuration could not be restored');
@@ -949,8 +1022,8 @@ export class NativeModels {
   }
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
-  await this.context.authStorage.credentials.reload();
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   const configuration = request.configuration;
   if (configuration.credentialRef !== null && !this.context.authStorage.credentials.list(configuration.providerId)
    .some(row => credentialReference(configuration.providerId, row.id) === configuration.credentialRef && row.disabledCause === null)) {
@@ -1079,7 +1152,8 @@ export class NativeModels {
   const request = ModelConfigureRequestSchema.parse(input);
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   const model = request.model;
   this.stageModel(state, model);
   const before = this.context.modelRegistry.getAll('all');
@@ -1109,7 +1183,8 @@ export class NativeModels {
   const request = ImageModelConfigureRequestSchema.parse(input);
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   const model = request.model;
   const existing = this.context.modelRegistry.find(model.provider, model.modelId);
   const configuredProvider = state.config.providers?.[model.provider];
@@ -1161,7 +1236,8 @@ export class NativeModels {
   const request = ModelDeleteRequestSchema.parse(input);
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
+  await this.reloadCredentials();
+  await this.syncModelPolicies();
   const patterns = cfgEnabledModels.get(this.context.settings);
   const allowed = filterAvailableModelsByEnabledPatterns(this.context.modelRegistry.getAll('all'), patterns, this.context.settings);
   const selectors = new Set(allowed.filter(model => model.provider !== request.selection.providerId || model.id !== request.selection.modelId)

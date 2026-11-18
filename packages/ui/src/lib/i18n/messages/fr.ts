@@ -8149,7 +8149,7 @@ export const dict = {
   "mainLayout.mobile.closeDrawerAria": "Fermer le tiroir",
   "sortableTabsStrip.aria.tabs": "Onglets",
   "openChamberLogo.aria.logo": "Logo OhPiChamber",
-  "markdownRenderer.code.proposal": "Proposal",
+  "markdownRenderer.code.proposal": "Proposition",
   "markdownRenderer.code.actions.copyTitle": "Copier le code",
   "markdownRenderer.code.actions.copiedTitle": "Copié",
   "markdownRenderer.table.actions.copyTitle": "Copier le tableau",

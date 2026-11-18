@@ -323,9 +323,7 @@ To run the real provider test, run the probe directly:
 bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --real-provider --output /home/shizuku/Project/ohpichamber-omp-artifacts/omp-m0-real-provider.json
 ```
 
-This probe expects necessary provider environment variables (e.g., `OMP_M0_PROVIDER_API_KEY`) to be exported in the shell running the script. It isolates its own internal state and does not source the deleted operator environment file.
-
-Real provider settings are configured through the app, and the probe writes the result to the evidence directory named in [standards.md](standards.md).
+This probe reads `OMP_M0_PROVIDER_API`, `OMP_M0_PROVIDER_API_KEY`, `OMP_M0_PROVIDER_BASE_URL`, and `OMP_M0_PROVIDER_MODEL` from the shell environment. For M0, these were supplied by the operator environment file (now deleted); to rerun, export these variables directly in the shell for this command. The probe writes only the sanitized report to the `--output` path in the evidence directory named in [standards.md](standards.md).
 
 
 ## Next implementation step

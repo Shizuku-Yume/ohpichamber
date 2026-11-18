@@ -19,9 +19,9 @@ bun run type-check
 bun run lint
 ```
 
-Real provider settings are configured through the app during an isolated run, or by creating a read-only copy of `~/.omp/agent/models.yml` and `~/.omp/agent/agent.db` into `<isolated-HOME>/.omp/agent/` (never modify `~/.omp/agent`).
+Real-provider checks configure the provider through the app inside the isolated run, or use a read-only copy of `~/.omp/agent/models.yml` and `~/.omp/agent/agent.db` in `<isolated-HOME>/.omp/agent/`; never modify `~/.omp/agent`.
 
-Data isolation: `~/.config/ohpichamber` (web/CLI host data) and `~/.config/OhPiChamber` (Electron userData) are the maintainer's real product data directories and must NEVER be touched by dev or test runs. Every real-path, dev or test run sets `HOME`, `OPENCHAMBER_DATA_DIR`, and `OPENCHAMBER_DESKTOP_USER_DATA_DIR` to a throwaway directory under `/tmp` or the task's evidence directory; never run the Host on the default data directory. You can also launch the fork through `~/.local/bin/ohpichamber-iso`, which isolates these directories.
+Data isolation: `~/.config/ohpichamber` (web/CLI host data) and `~/.config/OhPiChamber` (Electron userData) are the maintainer's real product data directories and must NEVER be touched by dev or test runs. Every real-path, dev or test run sets `HOME`, `OPENCHAMBER_DATA_DIR`, and `OPENCHAMBER_DESKTOP_USER_DATA_DIR` to a throwaway directory under `/tmp` or the task's evidence directory; never run the Host on the default data directory.
 
 Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/`, outside the repository, one directory per task and date (for example `task78-2026-10-24/`). Never a temporary directory.
 

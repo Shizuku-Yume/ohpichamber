@@ -71,4 +71,4 @@ Product guides under `packages/docs` describe the inherited runtime until their 
 
 ## License
 
-Forked from OpenChamber. Original licensing and attribution are retained in [LICENSE](LICENSE).
+Forked from OpenChamber (MIT, Copyright (c) 2025 Bohdan Triapitsyn). Original licensing and attribution are retained in [LICENSE](LICENSE).

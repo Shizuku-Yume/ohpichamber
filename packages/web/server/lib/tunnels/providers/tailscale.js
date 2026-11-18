@@ -95,7 +95,7 @@ export function createTailscaleTunnelProvider() {
     },
     start: async (request, context = {}) => {
       if (!Number.isInteger(context.activePort)) {
-        throw new TunnelServiceError('startup_failed', 'OpenChamber has no local port to share yet');
+        throw new TunnelServiceError('startup_failed', 'OhPiChamber has no local port to share yet');
       }
       const target = resolveTailscaleTarget();
       if (!target) {

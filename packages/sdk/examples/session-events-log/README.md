@@ -2,7 +2,7 @@
 
 A service-only extension that is told what happens in your sessions and writes
 it down. It declares `contributes.sessionEvents` next to its
-`contributes.service`, so OpenChamber posts each event it subscribed to
+`contributes.service`, so OhPiChamber posts each event it subscribed to
 (`POST /session-events`) to the service, from every project, whether or not a
 window is open. There is no panel: the extension's whole surface is the file it
 keeps.
@@ -45,7 +45,7 @@ page's title.
 
 ## Choosing projects
 
-OpenChamber sends every project's events and leaves the choice to the
+OhPiChamber sends every project's events and leaves the choice to the
 extension. This service reads `SESSION_JOURNAL_PROJECTS`, a comma-separated
 list of project directories, and journals only those; unset, it journals all
 of them. A real extension would keep that choice in its own settings or
@@ -58,4 +58,4 @@ bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/session-ev
 ```
 
 `scripts/session-events-example.test.ts` runs the built service the way
-OpenChamber does and checks each event type lands in the journal.
+OhPiChamber does and checks each event type lands in the journal.

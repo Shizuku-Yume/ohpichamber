@@ -228,7 +228,7 @@ export function createGiteaResourceService({
       const history = closed.reduce((newest, candidate) => (!newest || candidate.number > newest.number ? candidate : newest), null);
       return { raw: null, history };
     }
-    throw malformed(`${providerLabel} repository has more open pull requests than OpenChamber scans for a branch`);
+    throw malformed(`${providerLabel} repository has more open pull requests than OhPiChamber scans for a branch`);
   };
 
   const compactProject = (project) => ({ id: project.id, owner: project.owner, name: project.name });
@@ -378,10 +378,10 @@ export function createGiteaResourceService({
       const repo = repoPath(target.project);
       const [comments, reviews, diffText, changedFiles, ci, headProject, commits] = await Promise.all([
         readIssueComments(target.project, number),
-        client.collection(`${repo}/pulls/${number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OpenChamber reads` }),
+        client.collection(`${repo}/pulls/${number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OhPiChamber reads` }),
         options.includeDiff ? client.text(`${repo}/pulls/${number}.diff`) : Promise.resolve(''),
         options.includeDiff
-          ? client.collection(`${repo}/pulls/${number}/files`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more changed files than OpenChamber reads` })
+          ? client.collection(`${repo}/pulls/${number}/files`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more changed files than OhPiChamber reads` })
           : Promise.resolve([]),
         readCI(target.project, request.headSha),
         headProjectOf(raw, target, net.targets),
@@ -473,7 +473,7 @@ export function createGiteaResourceService({
     async projectBranches(directory, selector, remote) {
       const { target } = await network(directory, selector, remote, { requireComplete: true });
       const branches = await client.collection(`${repoPath(target.project)}/branches`, {}, {
-        limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} repository has more branches than OpenChamber reads`,
+        limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} repository has more branches than OhPiChamber reads`,
       });
       return branches.map((branch) => {
         if (!isString(branch?.name) || !branch.name) throw malformed(`${providerLabel} returned an invalid branch`);
@@ -745,7 +745,7 @@ export function createGiteaResourceService({
       if (remove.length) {
         // Gitea answers 204 to removing someone who already reviewed and keeps
         // them, so that removal is refused before anything is sent.
-        const reviews = await client.collection(`${repoPath(repo)}/pulls/${providerTarget.number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OpenChamber reads` });
+        const reviews = await client.collection(`${repoPath(repo)}/pulls/${providerTarget.number}/reviews`, {}, { limit: PAGE_LIMIT, maxItems: COLLECTION_MAX_ITEMS, message: `${providerLabel} pull request has more reviews than OhPiChamber reads` });
         const reviewed = remove.filter((login) => reviews.some((review) => isPlainObject(review) && review.user?.login === login
           && SUBMITTED_REVIEW_STATES.has(review.state) && review.dismissed !== true));
         if (reviewed.length) {

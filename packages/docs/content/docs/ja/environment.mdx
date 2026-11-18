@@ -1,32 +1,32 @@
 ---
 title: 環境変数
-description: OpenChamber を環境変数で設定します。
+description: OhPiChamber を環境変数で設定します。
 ---
 
 # 環境変数
 
-OpenChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`ohpichamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。
+OhPiChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`ohpichamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。
 
 ## エージェントセッション、Git、ターミナル用の変数
 
-エージェントセッション、Git、ターミナル、[プロジェクトアクション](/ja/project-actions/) に独自の変数（API トークンやデータベースアドレスなど）を渡すには、OpenChamber を起動する前に export するのではなく、**設定 → 一般 → 環境変数** に追加します。値は OpenChamber を実行しているマシンのデータディレクトリ内にある `environment.json` に保存され、あなたのユーザーのみが読み取れます。設定画面では一度保存した値を再表示しません。置き換えや削除はできますが、再読み取りはできません。
+エージェントセッション、Git、ターミナル、[プロジェクトアクション](/ja/project-actions/) に独自の変数（API トークンやデータベースアドレスなど）を渡すには、OhPiChamber を起動する前に export するのではなく、**設定 → 一般 → 環境変数** に追加します。値は OhPiChamber を実行しているマシンのデータディレクトリ内にある `environment.json` に保存され、あなたのユーザーのみが読み取れます。設定画面では一度保存した値を再表示しません。置き換えや削除はできますが、再読み取りはできません。
 
 - エージェントセッションは起動時にこれらを受け取ります。
 - Git、ターミナル、プロジェクトアクションは次回の実行時にこれらを受け取ります。
 
 プロジェクトごとの変数や、`direnv export json` のように変数を出力するコマンドは、**設定 → プロジェクト** で追加できます。[プロジェクト](/ja/projects/#プロジェクトの環境)を参照してください。
 
-以下はすべて、OpenChamber 自体が起動時に読み取るものです。
+以下はすべて、OhPiChamber 自体が起動時に読み取るものです。
 
-## OpenChamber サーバー
+## OhPiChamber サーバー
 
 ### `OPENCHAMBER_HOST`
 
-OpenChamber Web サーバーのバインドアドレスです。他のマシンからアクセスできるようにするには `0.0.0.0` を使います。
+OhPiChamber Web サーバーのバインドアドレスです。他のマシンからアクセスできるようにするには `0.0.0.0` を使います。
 
 ### `OPENCHAMBER_LAN_URL`
 
-ネットワーク上の他のデバイスが OpenChamber に接続するためのアドレスです（例: `http://192.168.1.20:3000`）。ペアリングリンクと QR コードは、OpenChamber が自分で検出したアドレスの代わりにこれを使います。検出が間違う場合に設定してください。たとえば Docker では、OpenChamber にはコンテナ内部のアドレスしか見えません。
+ネットワーク上の他のデバイスが OhPiChamber に接続するためのアドレスです（例: `http://192.168.1.20:3000`）。ペアリングリンクと QR コードは、OhPiChamber が自分で検出したアドレスの代わりにこれを使います。検出が間違う場合に設定してください。たとえば Docker では、OhPiChamber にはコンテナ内部のアドレスしか見えません。
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,21 +42,21 @@ OpenChamber Web サーバーのバインドアドレスです。他のマシン�
 
 ### `OPENCHAMBER_API_ONLY`
 
-`true` または `1` に設定すると、OpenChamber をヘッドレスモードで起動します。デスクトップおよびモバイルクライアント向けの API ルートは利用できますが、ブラウザ UI は配信されません。
+`true` または `1` に設定すると、OhPiChamber をヘッドレスモードで起動します。デスクトップおよびモバイルクライアント向けの API ルートは利用できますが、ブラウザ UI は配信されません。
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-自分のページのフレーム内に OpenChamber を表示できるオリジンをスペース区切りで指定します（例: `https://dash.example.com`）。`*` はすべてのサイトを許可します。既定では OpenChamber 自身とそのデスクトップ・モバイルアプリだけが埋め込めるため、他のサイトがボタンの上に重ねることはできません。
+自分のページのフレーム内に OhPiChamber を表示できるオリジンをスペース区切りで指定します（例: `https://dash.example.com`）。`*` はすべてのサイトを許可します。既定では OhPiChamber 自身とそのデスクトップ・モバイルアプリだけが埋め込めるため、他のサイトがボタンの上に重ねることはできません。
 
 ### `OPENCHAMBER_DATA_DIR`
 
-OpenChamber のデータディレクトリを上書きします。デフォルトは `~/.config/ohpichamber` です。
+OhPiChamber のデータディレクトリを上書きします。デフォルトは `~/.config/ohpichamber` です。
 
-OpenChamber が保存するものはすべてこのディレクトリ配下にあります: 設定、認証、プロジェクト設定、テーマ、プラン、音声モデル。バージョン 1.23 より前にカスタムディレクトリを使っていたインスタンスでは、初回起動時に `projects`、`themes`、`speech-models` フォルダーが `~/.config/ohpichamber` からここへコピーされます。元のフォルダーはそのまま残り、マージはされません。
+OhPiChamber が保存するものはすべてこのディレクトリ配下にあります: 設定、認証、プロジェクト設定、テーマ、プラン、音声モデル。バージョン 1.23 より前にカスタムディレクトリを使っていたインスタンスでは、初回起動時に `projects`、`themes`、`speech-models` フォルダーが `~/.config/ohpichamber` からここへコピーされます。元のフォルダーはそのまま残り、マージはされません。
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-プロジェクトのないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/ohpichamber/chats` です。既存のチャットは移動されません。
+プロジェクトのないチャット用に OhPiChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/ohpichamber/chats` です。既存のチャットは移動されません。
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -74,21 +74,21 @@ API レスポンス圧縮を制御します。`true` または `1` で強制的�
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-利用上限やスキルカタログなど、OpenChamber 自身が送るリクエストをプロキシ経由にします。小文字の変数名も使えます。`NO_PROXY` のホストは直接接続し、`localhost`、`127.0.0.1`、`::1` は常に直接接続するため、サインインのコールバックやローカル接続はそのまま動作します。
+利用上限やスキルカタログなど、OhPiChamber 自身が送るリクエストをプロキシ経由にします。小文字の変数名も使えます。`NO_PROXY` のホストは直接接続し、`localhost`、`127.0.0.1`、`::1` は常に直接接続するため、サインインのコールバックやローカル接続はそのまま動作します。
 
 ## ターミナルと Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-OpenChamber のターミナルセッションで使うシェル実行ファイルです。
+OhPiChamber のターミナルセッションで使うシェル実行ファイルです。
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-OpenChamber の Git 機能で使う Git 実行ファイルです。
+OhPiChamber の Git 機能で使う Git 実行ファイルです。
 
 ### `GIT_BINARY`
 
-代替の Git 実行ファイル上書きです。OpenChamber 固有の設定には `OPENCHAMBER_GIT_BINARY` を推奨します。
+代替の Git 実行ファイル上書きです。OhPiChamber 固有の設定には `OPENCHAMBER_GIT_BINARY` を推奨します。
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -98,7 +98,7 @@ Git に基づくファイル読み取りキャッシュの有効期間（ミリ�
 
 ### `OPENAI_API_KEY`
 
-OpenChamber の音声機能が OpenAI 本体を呼び出すときに使う API キーです。カスタムの OpenAI 互換サーバーには送信されません。そのサーバーには設定で専用のキーを指定してください。
+OhPiChamber の音声機能が OpenAI 本体を呼び出すときに使う API キーです。カスタムの OpenAI 互換サーバーには送信されません。そのサーバーには設定で専用のキーを指定してください。
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -106,15 +106,15 @@ OpenChamber の音声機能が OpenAI 本体を呼び出すときに使う API �
 
 ### `NGROK_AUTHTOKEN`
 
-OpenChamber のトンネルコマンドで使う ngrok 認証トークンです。`ngrok config add-authtoken <token>` で ngrok 側に設定することもできます。
+OhPiChamber のトンネルコマンドで使う ngrok 認証トークンです。`ngrok config add-authtoken <token>` で ngrok 側に設定することもできます。
 
 ## ランタイムヘルパー
 
 ### `BUN_BINARY`
 
-デーモンプロセスを起動するときに OpenChamber が使う Bun 実行ファイルです。
+デーモンプロセスを起動するときに OhPiChamber が使う Bun 実行ファイルです。
 
 ### `BUN_INSTALL`
 
-Bun のインストールルートです。OpenChamber はデーモン起動と更新のために `bin/bun` を探す際に使います。
+Bun のインストールルートです。OhPiChamber はデーモン起動と更新のために `bin/bun` を探す際に使います。
 

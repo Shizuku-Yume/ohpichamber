@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Desktop runtime for OhPiChamber",
-  "author": "OpenChamber",
+  "author": "OhPiChamber",
   "type": "module",
   "main": "./dist-bundle/entry.mjs",
   "dependencies": {
@@ -128,8 +128,8 @@
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
       "extendInfo": {
         "CFBundleIconName": "AppIcon",
-        "NSLocalNetworkUsageDescription": "OpenChamber needs access to devices and services on your local network.",
-        "NSAppleEventsUsageDescription": "Lets commands that you or an agent run in OpenChamber control other apps."
+        "NSLocalNetworkUsageDescription": "OhPiChamber needs access to devices and services on your local network.",
+        "NSAppleEventsUsageDescription": "Lets commands that you or an agent run in OhPiChamber control other apps."
       },
       "hardenedRuntime": true,
       "gatekeeperAssess": false,

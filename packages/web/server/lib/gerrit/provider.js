@@ -93,7 +93,7 @@ export function createProvider({
   const verify = (origin, password, { username } = {}) => verifyGerritCredentials({ origin, login: username, password, fetch: fetchImpl, timeoutMs });
   const probe = async (origin, password, { username } = {}) => {
     const { version, supported } = await probeGerritVersion({ origin, login: username, password, fetch: fetchImpl, timeoutMs });
-    return supported ? { version, supported } : { version, supported, message: `Gerrit ${version} is older than OpenChamber supports (3.8)` };
+    return supported ? { version, supported } : { version, supported, message: `Gerrit ${version} is older than OhPiChamber supports (3.8)` };
   };
   const identityFor = (origin, accountId) => ({ provider: descriptor.id, instance: origin, accountId });
   const accounts = createPatAccountAuth({ descriptor, store, events, verify, probe, classifyFailure: classifyGerritFailure });

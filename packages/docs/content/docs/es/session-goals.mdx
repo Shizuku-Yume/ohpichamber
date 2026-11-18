@@ -5,7 +5,7 @@ description: Envía un objetivo para que OMP trabaje en él hasta detenerse.
 
 # Objetivos de sesión
 
-Los objetivos usan el modo Goal de OMP en el worker del Agent Service. OMP inicia las continuaciones y el agente declara cuándo termina; OpenChamber no ejecuta un supervisor ni un auditor independiente.
+Los objetivos usan el modo Goal de OMP en el worker del Agent Service. OMP inicia las continuaciones y el agente declara cuándo termina; OhPiChamber no ejecuta un supervisor ni un auditor independiente.
 
 Un objetivo reúne un prompt y una condición de finalización. OMP continúa hasta que el agente declara que se completó, se alcanza el presupuesto de tokens, no hay progreso o detienes el objetivo.
 
@@ -21,7 +21,7 @@ Funciona igual en una sesión existente y en un borrador de sesión nueva: arma 
 - **Desde una respuesta del agente**: en el diálogo para iniciar una sesión desde la respuesta, marca **Ejecutar como objetivo**.
 - **Desde un plan**: al implementar un plan guardado en una sesión o worktree nuevos, marca **Ejecutar como objetivo**. El contenido del plan es el objetivo de OMP.
 - **Según un horario**: marca **Ejecutar como objetivo** en una [tarea programada](/scheduled-tasks/).
-- **Desde la CLI**: usa `openchamber session create --prompt <p> --goal`; `session send` y `session fork` también aceptan `--goal`.
+- **Desde la CLI**: usa `ohpichamber session create --prompt <p> --goal`; `session send` y `session fork` también aceptan `--goal`.
 
 ## Escribe un objetivo autocontenido
 

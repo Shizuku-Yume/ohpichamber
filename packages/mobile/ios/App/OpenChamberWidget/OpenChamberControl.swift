@@ -21,13 +21,13 @@ struct OpenChamberNewSessionControl: ControlWidget {
             }
         }
         .displayName("New Session")
-        .description("Start a new OpenChamber session.")
+        .description("Start a new OhPiChamber session.")
     }
 }
 
 @available(iOS 18.0, *)
 struct OpenNewSessionIntent: AppIntent {
-    static let title: LocalizedStringResource = "New OpenChamber Session"
+    static let title: LocalizedStringResource = "New OhPiChamber Session"
     static let openAppWhenRun: Bool = true
     // Hidden from the Shortcuts action list: run from there, its OpenURLIntent for the app's own
     // scheme is refused. Shortcuts and Siri use NewSessionShortcutIntent (OpenChamberAppShortcuts.swift).

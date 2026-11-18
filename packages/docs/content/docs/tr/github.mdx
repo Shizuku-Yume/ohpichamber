@@ -1,13 +1,13 @@
 ---
 title: "Git sunucuları: issue'lar ve pull request'ler"
-description: GitHub, GitLab, Gitea, Forgejo ya da Gerrit'i bağlayın ve OpenChamber'dan issue'lar ve pull request'lerle çalışın.
+description: GitHub, GitLab, Gitea, Forgejo ya da Gerrit'i bağlayın ve OhPiChamber'dan issue'lar ve pull request'lerle çalışın.
 ---
 
 # Git sunucuları: issue'lar ve pull request'ler
 
-Projenizin bulunduğu sunucuda bir hesap bağlayın. OpenChamber o sunucunun issue'larını ve pull request'lerini listeleyebilir, birinden oturum başlatabilir, sizin yerinize pull request açabilir, inceleyebilir ve merge edebilir. Beş sunucu yerleşiktir: GitHub Enterprise dahil GitHub; self-managed GitLab dahil GitLab; Gitea; Codeberg dahil Forgejo; ve Gerrit. Bir [uzantı](/extensions/#git-sunucusu-olarak-bir-uzantı) bir tane daha ekleyebilir.
+Projenizin bulunduğu sunucuda bir hesap bağlayın. OhPiChamber o sunucunun issue'larını ve pull request'lerini listeleyebilir, birinden oturum başlatabilir, sizin yerinize pull request açabilir, inceleyebilir ve merge edebilir. Beş sunucu yerleşiktir: GitHub Enterprise dahil GitHub; self-managed GitLab dahil GitLab; Gitea; Codeberg dahil Forgejo; ve Gerrit. Bir [uzantı](/extensions/#git-sunucusu-olarak-bir-uzantı) bir tane daha ekleyebilir.
 
-OpenChamber'ın hangi sunucuyla konuşacağına projenin remote'u karar verir. `origin`'i gitlab.com'da olan bir proje; pano, branch'lerindeki pull request rozeti ve Git paneli için GitLab hesabınızı kullanır. `~/.ssh/config` içindeki bir host takma adındaki remote, örneğin `github.com-work`, hiçbir sunucuyla eşleşmez. Gitea ve Forgejo, SSH yapılandırması instance'ın web adresini gösteren takma adı eşleştirir. Instance'ın SSH klon adresini **Settings → Integrations** bölümüne girdiğinizde, o adresteki remote da eşleşir.
+OhPiChamber'ın hangi sunucuyla konuşacağına projenin remote'u karar verir. `origin`'i gitlab.com'da olan bir proje; pano, branch'lerindeki pull request rozeti ve Git paneli için GitLab hesabınızı kullanır. `~/.ssh/config` içindeki bir host takma adındaki remote, örneğin `github.com-work`, hiçbir sunucuyla eşleşmez. Gitea ve Forgejo, SSH yapılandırması instance'ın web adresini gösteren takma adı eşleştirir. Instance'ın SSH klon adresini **Settings → Integrations** bölümüne girdiğinizde, o adresteki remote da eşleşir.
 
 Kullanılan sözcükler sunucuya göre değişir. GitLab merge request der, Gerrit ise change (değişiklik) der.
 
@@ -21,7 +21,7 @@ Kullanılan sözcükler sunucuya göre değişir. GitLab merge request der, Gerr
    - **Forgejo**: Codeberg için bir personal access token yapıştırın; başka bir sunucu için önce adresini ekleyin.
    - **Gerrit**: sunucunuzun adresini, ardından Gerrit kullanıcı adınızı ve bir HTTP parolası ekleyin.
 
-Bağlantı kurulunca hesabınız kartta görünür. Bir sunucuda birden fazla hesap bağlayıp aralarında geçiş yapabilir ya da istediğiniz zaman bağlantıyı kesebilirsiniz. Aynı makinede `gh` CLI ile giriş yapılmışsa OpenChamber onu GitHub için de kullanabilir. Her jetonun ihtiyaç duyduğu kapsamlar ve her sunucunun gerektirdiği sürümler [Entegrasyonlar](/integrations/#gitlab-gitea-forgejo-ve-gerrit) sayfasında.
+Bağlantı kurulunca hesabınız kartta görünür. Bir sunucuda birden fazla hesap bağlayıp aralarında geçiş yapabilir ya da istediğiniz zaman bağlantıyı kesebilirsiniz. Aynı makinede `gh` CLI ile giriş yapılmışsa OhPiChamber onu GitHub için de kullanabilir. Her jetonun ihtiyaç duyduğu kapsamlar ve her sunucunun gerektirdiği sürümler [Entegrasyonlar](/integrations/#gitlab-gitea-forgejo-ve-gerrit) sayfasında.
 
 Bağlı bir hesap projenin [Git kimliği](/git-identities/) de olabilir; böylece commit'ler onun adını taşır, HTTPS üzerinden push da onun jetonunu kullanır.
 
@@ -29,7 +29,7 @@ Bağlı bir hesap projenin [Git kimliği](/git-identities/) de olabilir; böylec
 
 Bir [worktree session](/worktrees/) oluşturduğunuzda, onu projenin sunucusundaki bir issue ya da pull request üzerinden başlatabilirsiniz:
 
-- bir **issue** seçin. OpenChamber branch'i onun adına göre adlandırır
+- bir **issue** seçin. OhPiChamber branch'i onun adına göre adlandırır
 - bir **pull request** seçin. Pull request'in branch'ini checkout eder. İsterseniz diff'ini de ekleyebilirsiniz, böylece agent değişikliğin tamamını görür
 - bir **Gerrit değişikliği** seçin. Son yama setini `change-<number>` adlı bir branch'e checkout eder
 
@@ -39,7 +39,7 @@ Yeni oturum, öğe mesaj kutusuna zaten eklenmiş halde açılır. Sizin yeriniz
 
 ## Pull request açma ve yönetme
 
-[Git paneli](/git/) içindeki **PR** sekmesinden pull request oluşturabilir, güncelleyebilir, taslağı hazır diye işaretleyebilir ya da merge edebilirsiniz. OpenChamber başlığı ve açıklamayı değişikliklerinizden yazabilir.
+[Git paneli](/git/) içindeki **PR** sekmesinden pull request oluşturabilir, güncelleyebilir, taslağı hazır diye işaretleyebilir ya da merge edebilirsiniz. OhPiChamber başlığı ve açıklamayı değişikliklerinizden yazabilir.
 
 - **GitLab**: aynı sekme merge request açar. Merge, merge ve squash seçeneklerini sunar.
 - **Gitea** ve **Forgejo**: GitHub'dakiyle aynı.

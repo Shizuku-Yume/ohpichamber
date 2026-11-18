@@ -17,7 +17,7 @@ export const sessionReference = (session: { id: string; title: string }): Sessio
     kind: 'session',
     sessionId: session.id,
     title: session.title,
-    contextText: `The user referenced another OpenChamber session, "${session.title}" (${session.id}). `
+    contextText: `The user referenced another OhPiChamber session, "${session.title}" (${session.id}). `
         + `Its messages can be read with the openchamber tool (session.messages, sessionId ${session.id}).`,
 });
 
@@ -32,7 +32,7 @@ export const messageText = (parts: readonly SessionReferencePart[]): string => p
 const authorOf = (role: string): string => {
     if (role === 'user') return 'the user of that session';
     if (role === 'assistant') return 'the agent of that session';
-    return 'OpenChamber';
+    return 'OhPiChamber';
 };
 
 export const sessionMessageReference = (
@@ -48,7 +48,7 @@ export const sessionMessageReference = (
         messageId: message.info.id,
         sessionTitle: session.title,
         excerpt: excerpt.length > EXCERPT_LENGTH ? `${excerpt.slice(0, EXCERPT_LENGTH - 1)}…` : excerpt,
-        contextText: `The user attached a message from another OpenChamber session, "${session.title}" `
+        contextText: `The user attached a message from another OhPiChamber session, "${session.title}" `
             + `(${session.id}, message ${message.info.id}). It was written by ${authorOf(message.info.role)}. The message:\n\n${text}`,
     };
 };

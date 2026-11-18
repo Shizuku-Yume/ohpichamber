@@ -1,18 +1,18 @@
 ---
 title: Intégrations
-description: Connecte les services et abonnements avec lesquels OpenChamber travaille.
+description: Connecte les services et abonnements avec lesquels OhPiChamber travaille.
 ---
 
 # Intégrations
 
-**Paramètres → Intégrations** est l'endroit où tu te connectes aux services avec lesquels OpenChamber travaille. La connexion est enregistrée sur le serveur OpenChamber, donc le web, le bureau et un téléphone appairé la partagent.
+**Paramètres → Intégrations** est l'endroit où tu te connectes aux services avec lesquels OhPiChamber travaille. La connexion est enregistrée sur le serveur OhPiChamber, donc le web, le bureau et un téléphone appairé la partagent.
 
 ## Catalogue d'intégrations
 
 Le catalogue d'intégrations liste plus de 150 services que tu peux donner à l'agent en un clic : Linear, Notion, Sentry, Supabase, Figma, des outils d'observabilité, des CRM, des notes de réunion et plus encore. En installer un ajoute en général le serveur MCP du service (la connexion que l'agent utilise pour y lire et y modifier des choses), et parfois des skills ou un plugin qui l'accompagnent. Il s'installe pour ton utilisateur, donc tous les projets en profitent.
 
 1. Choisis l'icône de boutique dans l'en-tête de la barre latérale.
-2. Trouve un service : cherche par nom, ou réduis la liste avec une catégorie comme **Code** ou **Qualité et opérations**. **OpenChamber** liste nos propres extensions et plugins.
+2. Trouve un service : cherche par nom, ou réduis la liste avec une catégorie comme **Code** ou **Qualité et opérations**. **OhPiChamber** liste nos propres extensions et plugins.
 3. Choisis **+** sur sa ligne, ou ouvre-le et choisis **Installer**.
 4. Connecte-toi comme le service le demande :
    - **OAuth** : la page de connexion du service s'ouvre dans ton navigateur. Approuve l'accès là-bas.
@@ -33,7 +33,7 @@ Le catalogue est disponible dans l'app web et l'app de bureau. Il est masqué en
 
 ## GitHub
 
-Déplie la carte **GitHub** et choisis **Connect GitHub** pour te connecter avec un code d'appareil court. Une fois connecté, OpenChamber peut démarrer des sessions depuis des issues et des pull requests, les attacher à des messages, et ouvrir ou mettre à jour des PR. Tout ce que les hébergeurs Git savent faire est sur [Hôtes Git](/fr/github/).
+Déplie la carte **GitHub** et choisis **Connect GitHub** pour te connecter avec un code d'appareil court. Une fois connecté, OhPiChamber peut démarrer des sessions depuis des issues et des pull requests, les attacher à des messages, et ouvrir ou mettre à jour des PR. Tout ce que les hébergeurs Git savent faire est sur [Hôtes Git](/fr/github/).
 
 ## GitLab, Gitea, Forgejo et Gerrit
 
@@ -46,7 +46,7 @@ GitLab, Gitea, Forgejo et Gerrit ont chacun leur propre carte à côté de GitHu
 
 Sur Gerrit, tu relis des changements. Chaque envoi d'un changement est un patchset, et l'aperçu du changement te permet d'en choisir un plus ancien à lire. Tu fais une review en votant sur les labels du projet, comme Code-Review et Verified, et tu intègres un changement avec **Soumettre** une fois ses conditions de soumission remplies. Gerrit n'a pas d'issues, donc seuls les changements apparaissent. Pour créer un changement, ou y envoyer un nouveau patchset, utilise **Pousser en revue** dans le panneau Git ; voir [Git](/fr/git/#pousser-en-revue-sur-gerrit).
 
-Le remote du projet décide du compte de quelle carte OpenChamber utilise, et un compte sur n'importe laquelle de ces cartes peut être l'[identité Git](/fr/git-identities/) d'un projet. Une [extension](/fr/extensions/#une-extension-comme-hébergeur-git) peut ajouter un autre hébergeur avec sa propre carte.
+Le remote du projet décide du compte de quelle carte OhPiChamber utilise, et un compte sur n'importe laquelle de ces cartes peut être l'[identité Git](/fr/git-identities/) d'un projet. Une [extension](/fr/extensions/#une-extension-comme-hébergeur-git) peut ajouter un autre hébergeur avec sa propre carte.
 
 ## Linear
 
@@ -80,7 +80,7 @@ Dans le composer du chat, ouvre le menu **+** et choisis **Linear**. L'issue acc
 
 ### Commentaires de session
 
-Active **Session comments** dans la carte Linear : une session démarrée depuis une issue, ou dont le premier message a l'issue jointe, publie un commentaire sur cette issue au démarrage, à la fin ou en cas d'échec, chacun avec un lien qui ouvre la session. Les commentaires ne sont publiés que si ce serveur OpenChamber a une adresse publique, pour que le lien fonctionne pour tout le monde sur l'issue ; sur une adresse locale ou privée, rien n'est publié.
+Active **Session comments** dans la carte Linear : une session démarrée depuis une issue, ou dont le premier message a l'issue jointe, publie un commentaire sur cette issue au démarrage, à la fin ou en cas d'échec, chacun avec un lien qui ouvre la session. Les commentaires ne sont publiés que si ce serveur OhPiChamber a une adresse publique, pour que le lien fonctionne pour tout le monde sur l'issue ; sur une adresse locale ou privée, rien n'est publié.
 
 ## Installer une intégration
 
@@ -92,7 +92,7 @@ Les intégrations s'installent pour ton utilisateur et fonctionnent donc dans to
 
 ## Canaux de notification des extensions
 
-Une [extension](/fr/extensions/) peut transmettre tes notifications vers Slack, Matrix ou un serveur à elle. Une fois que tu l'as autorisée dans **Settings → Extensions**, elle reçoit une carte sous **Extension accounts** sur cette page. Saisis-y le jeton du compte, et l'adresse du serveur quand la carte la demande, puis connecte : à partir de là, l'extension reçoit les mêmes notifications que ton téléphone, selon tes [réglages de notification](/fr/notifications/). Le jeton reste dans OpenChamber ; le service de l'extension envoie via OpenChamber et ne le voit jamais.
+Une [extension](/fr/extensions/) peut transmettre tes notifications vers Slack, Matrix ou un serveur à elle. Une fois que tu l'as autorisée dans **Settings → Extensions**, elle reçoit une carte sous **Extension accounts** sur cette page. Saisis-y le jeton du compte, et l'adresse du serveur quand la carte la demande, puis connecte : à partir de là, l'extension reçoit les mêmes notifications que ton téléphone, selon tes [réglages de notification](/fr/notifications/). Le jeton reste dans OhPiChamber ; le service de l'extension envoie via OhPiChamber et ne le voit jamais.
 
 Si le serveur refuse le jeton plus tard, la carte indique que le compte a besoin d'attention ; reconnecte-le avec un nouveau jeton. Déconnecte pour arrêter les envois sans retirer l'extension, ou mets l'extension en pause. Retirer l'extension oublie le compte.
 
@@ -100,7 +100,7 @@ Si le serveur refuse le jeton plus tard, la carte indique que le compte a besoin
 
 Une [extension](/fr/extensions/) peut ajouter un outil de suivi des tâches à côté de Linear. Une fois que tu l'as autorisée dans **Settings → Extensions**, elle reçoit une carte sous **Extension accounts** sur cette page. Saisis l'adresse du serveur quand la carte la demande, puis connecte un compte : colle un jeton, ou enregistre le client id de l'application que tu as enregistrée auprès de l'outil et connecte-toi dans le navigateur. Quand l'outil gère plusieurs comptes, **Add account** en connecte un autre et **Switch to** change celui en usage. L'association de projets et les commentaires de session apparaissent sur la carte quand l'outil les propose, comme pour Linear.
 
-Ses éléments apparaissent alors dans le sélecteur, le menu **+** du chat, New Worktree, les éléments liés d'une session et les états en direct des éléments que tu suis. Les jetons restent dans OpenChamber ; le service de l'extension atteint l'outil via OpenChamber et ne les voit jamais. Si l'outil refuse un identifiant plus tard, la carte indique que le compte a besoin d'attention ; reconnecte-le. Mettre l'extension en pause retire l'outil de tous les endroits où il apparaît et garde les comptes ; la retirer les oublie.
+Ses éléments apparaissent alors dans le sélecteur, le menu **+** du chat, New Worktree, les éléments liés d'une session et les états en direct des éléments que tu suis. Les jetons restent dans OhPiChamber ; le service de l'extension atteint l'outil via OhPiChamber et ne les voit jamais. Si l'outil refuse un identifiant plus tard, la carte indique que le compte a besoin d'attention ; reconnecte-le. Mettre l'extension en pause retire l'outil de tous les endroits où il apparaît et garde les comptes ; la retirer les oublie.
 
 ## Claude Code
 
@@ -114,13 +114,13 @@ Claude Code utilise ton plan Claude Pro ou Max via la CLI Claude Code installée
 ## Mettre à jour ou retirer
 
 - **Update** installe la dernière version publiée du plugin.
-- **Remove** supprime le plugin d'OpenChamber. Le fournisseur cesse d'être chargé sans nécessiter de modification manuelle de la configuration.
+- **Remove** supprime le plugin d'OhPiChamber. Le fournisseur cesse d'être chargé sans nécessiter de modification manuelle de la configuration.
 
 Si une carte indique que les entrées nécessitent une gestion manuelle, choisis **Manage plugins** et nettoie les doublons à cet endroit.
 
 ## Excalidraw
 
-Excalidraw te permet de dessiner dans les fichiers `.excalidraw` et les dessins Obsidian `.excalidraw.md` directement dans Files. C'est une extension OpenChamber, listée sous **OpenChamber extensions** sur la même page.
+Excalidraw te permet de dessiner dans les fichiers `.excalidraw` et les dessins Obsidian `.excalidraw.md` directement dans Files. C'est une extension OhPiChamber, listée sous **OhPiChamber extensions** sur la même page.
 
 1. Ouvre **Settings → Integrations** et choisis **Install** sur la carte Excalidraw. Tu peux aussi ouvrir un dessin dans Files et choisir **Install** dans l'avis affiché au-dessus.
 2. Rouvre le dessin. Le canevas remplace le texte du fichier, et Cmd/Ctrl+S, l'enregistrement automatique, le basculement vers la source et le plein écran fonctionnent comme pour n'importe quel fichier.
@@ -129,17 +129,17 @@ La carte met à jour l'extension quand une nouvelle version sort, la réactive s
 
 ## Resource Monitor
 
-Resource Monitor indique combien de processeur et de mémoire votre machine utilise, et quelle part revient à OpenChamber, à l'Agent Service, à tout ce qu'ils ont lancé et aux serveurs de développement qui tournent sous eux. C'est une extension OpenChamber, listée sous **OpenChamber extensions** sur la même page.
+Resource Monitor indique combien de processeur et de mémoire votre machine utilise, et quelle part revient à OhPiChamber, à l'Agent Service, à tout ce qu'ils ont lancé et aux serveurs de développement qui tournent sous eux. C'est une extension OhPiChamber, listée sous **OhPiChamber extensions** sur la même page.
 
 1. Ouvrez **Settings → Integrations** et choisissez **Install** sur la carte Resource Monitor.
-2. Approuvez son service local dans **Settings → Extensions**. Les chiffres viennent d'un petit processus qu'OpenChamber lance à côté du panneau. Il ne mesure que pendant que le panneau ou la section **Resources** est à l'écran.
+2. Approuvez son service local dans **Settings → Extensions**. Les chiffres viennent d'un petit processus qu'OhPiChamber lance à côté du panneau. Il ne mesure que pendant que le panneau ou la section **Resources** est à l'écran.
 3. Ouvrez **Resource Monitor** depuis la barre de droite. Un court résumé apparaît aussi sous **Resources** dans le panneau Work Status.
 
-Stop sur un serveur de développement ou une tâche arrête cette commande avec tout ce qu'elle a lancé, pour qu'un watcher ne relance pas le serveur. **Stop all** dans le groupe Terminal arrête tout ce qui tourne dans le terminal et les project actions et laisse les onglets du terminal ouverts. OpenChamber lui-même et l'Agent Service n'ont pas de Stop.
+Stop sur un serveur de développement ou une tâche arrête cette commande avec tout ce qu'elle a lancé, pour qu'un watcher ne relance pas le serveur. **Stop all** dans le groupe Terminal arrête tout ce qui tourne dans le terminal et les project actions et laisse les onglets du terminal ouverts. OhPiChamber lui-même et l'Agent Service n'ont pas de Stop.
 
-Les serveurs de développement apparaissent quand ils tournent sous OpenChamber : lancés dans le terminal intégré, ou par un agent dans l'espace de travail géré. Un serveur qui se détache de son processus parent, ou un conteneur lancé avec `docker compose up -d`, n'est pas listé. Si vous êtes connecté à un OpenChamber distant, le moniteur montre cette machine. Web et bureau uniquement.
+Les serveurs de développement apparaissent quand ils tournent sous OhPiChamber : lancés dans le terminal intégré, ou par un agent dans l'espace de travail géré. Un serveur qui se détache de son processus parent, ou un conteneur lancé avec `docker compose up -d`, n'est pas listé. Si vous êtes connecté à un OhPiChamber distant, le moniteur montre cette machine. Web et bureau uniquement.
 
 ## À voir aussi
 
-- [Hôtes Git](/fr/github/) — tout ce que GitHub, GitLab, Gitea, Forgejo et Gerrit peuvent faire dans OpenChamber
+- [Hôtes Git](/fr/github/) — tout ce que GitHub, GitLab, Gitea, Forgejo et Gerrit peuvent faire dans OhPiChamber
 - [Sessions worktree](/fr/worktrees/) — où les sessions d'issue peuvent démarrer

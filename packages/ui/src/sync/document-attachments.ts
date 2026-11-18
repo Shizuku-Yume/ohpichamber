@@ -14,7 +14,7 @@ const MAX_ODS_REPEAT = 1_000
 const MAX_ODS_COLUMNS = 1_024
 // Excel's own limit. A longer code is a crafted file, and the scan below is quadratic on it.
 const MAX_NUMBER_FORMAT_CHARS = 255
-const TEXT_TRUNCATION_NOTICE = "\n\n[Document text truncated by OpenChamber]\n"
+const TEXT_TRUNCATION_NOTICE = "\n\n[Document text truncated by OhPiChamber]\n"
 
 const OFFICE_EXTENSIONS = new Set(["docx", "pptx", "xlsx", "odt", "odp", "ods"])
 const IMAGE_MIMES = new Map([

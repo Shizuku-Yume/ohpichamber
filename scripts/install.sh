@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# OpenChamber Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/btriapitsyn/openchamber/main/scripts/install.sh | bash
+# OhPiChamber Install Script
+# Usage: curl -fsSL https://raw.githubusercontent.com/Shizuku-Yume/ohpichamber/main/scripts/install.sh | bash
 
 set -euo pipefail
 
@@ -179,8 +179,8 @@ main() {
   echo ""
   echo "  ╭───────────────────────────────────╮"
   echo "  │                                   │"
-  echo "  │   OpenChamber Installer           │"
-  echo "  │   Web interface for OpenCode      │"
+  echo "  │   OhPiChamber Installer           │"
+  echo "  │   Web UI for the OMP agent        │"
   echo "  │                                   │"
   echo "  ╰───────────────────────────────────╯"
   echo ""
@@ -199,25 +199,19 @@ main() {
   fi
   success "Node.js v$NODE_VERSION found"
 
-  # If OhPiChamber is already installed, hand off to its own updater instead
-  # of guessing a package manager. `$BIN_NAME update` detects which manager
-  # actually owns the existing global install and reinstalls with that one —
-  # reinstalling with a different manager here would orphan files and break PATH.
+  # Do not reinstall with a guessed package manager when OhPiChamber is
+  # already on PATH: reinstalling with a different manager would orphan the
+  # existing global install and break PATH.
   if command_exists "$BIN_NAME"; then
-    info "OhPiChamber is already installed — updating via '$BIN_NAME update'..."
+    info "OhPiChamber is already installed."
     echo ""
-    if "$BIN_NAME" update; then
-      echo ""
-      success "OhPiChamber is up to date!"
-      exit 0
-    fi
+    echo "  Update it with the package manager you used to install it:"
+    echo "    npm install -g $PACKAGE_NAME@latest"
+    echo "    bun add -g $PACKAGE_NAME@latest"
+    echo "    pnpm add -g $PACKAGE_NAME@latest"
+    echo "    yarn global add $PACKAGE_NAME@latest"
     echo ""
-    error "Update failed."
-    echo ""
-    echo "  Try running it manually:"
-    echo "    $BIN_NAME update"
-    echo ""
-    exit 1
+    exit 0
   fi
 
   # Detect package manager
@@ -239,25 +233,25 @@ main() {
 
   # Install
   echo ""
-  info "Installing OpenChamber..."
+  info "Installing OhPiChamber..."
   echo "  Running: $INSTALL_CMD"
   echo ""
   
   if eval "$INSTALL_CMD"; then
     echo ""
-    # Wordmark (toilet "pagga", "Open"/"Chamber" stacked).
+    # Wordmark (toilet "pagga", "OhPi"/"Chamber" stacked).
     # Hardcoded so the user needs no extra tools.
     printf '%b' "$BLUE"
     cat <<'EOF'
-  ░█▀█░█▀█░█▀▀░█▀█
-  ░█░█░█▀▀░█▀▀░█░█
-  ░▀▀▀░▀░░░▀▀▀░▀░▀
+  ░█▀█░█░░░█▀█░▀░
+  ░█░█░█▀█░█▀▀░█░
+  ░▀▀▀░▀░▀░▀░░░▀░
   ░█▀▀░█░█░█▀█░█▄█░█▀▄░█▀▀░█▀▄
   ░█░░░█▀█░█▀█░█░█░█▀▄░█▀▀░█▀▄
   ░▀▀▀░▀░▀░▀░▀░▀░▀░▀▀░░▀▀▀░▀░▀
 EOF
     printf '%b\n' "$NC"
-    success "OpenChamber installed successfully!"
+    success "OhPiChamber installed successfully!"
     echo ""
 
     # Verify the binary is actually reachable. Global installs frequently
@@ -287,7 +281,7 @@ EOF
     fi
     echo ""
     echo "  Prerequisites:"
-    echo "    Make sure OpenCode is running: opencode serve"
+    echo "    Make sure Bun 1.3.14+ and git are on PATH"
     echo ""
   else
     echo ""

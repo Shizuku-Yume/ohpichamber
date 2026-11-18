@@ -55,7 +55,7 @@ host.onReady((context) => {
   mountBanner(states, { title: 'Ready when you are', body: 'Use a banner for something the reader needs to know.', tone: 'info' });
   mountEmpty(states, { title: 'A clean slate', body: 'Start small. Add the first item when you have something worth keeping.' });
 
-  const liveContext = card(panel('context'), 'Your host, live', 'Switch projects or sessions in OpenChamber. This view follows without rebuilding the controls.');
+  const liveContext = card(panel('context'), 'Your host, live', 'Switch projects or sessions in OhPiChamber. This view follows without rebuilding the controls.');
   const contextOutput = element('pre', 'code'); liveContext.append(contextOutput);
   let current = context;
   const showContext = () => { contextOutput.textContent = JSON.stringify({ directory: current.directory, session: current.session, surface: current.surface, theme: current.theme.mode, locale: current.locale }, null, 2); };
@@ -67,7 +67,7 @@ host.onReady((context) => {
   for (const instruction of ['Open another session and watch its title change.', 'Switch between light and dark themes.', 'Resize the panel. The layout follows the space.', 'Return to Components. Your input is still there.']) paragraph(guide, instruction);
 
   const actions = card(panel('actions'), 'Give the host a nudge', 'These actions happen only when you click. Composing does not send a message.');
-  let draft = 'Help me design an OpenChamber extension.';
+  let draft = 'Help me design an OhPiChamber extension.';
   const draftField = mountTextField(actions, { label: 'Text to compose', value: draft, multiline: true, rows: 3, onChange: (value) => { draft = value; draftField.update({ value }); } });
   const actionRow = row(actions);
   mountButton(actionRow, { label: 'Compose', onClick: () => { void notice.run(async () => { await host.compose({ text: draft, mode: 'append' }); notice.show('Added to your draft', 'Review it in the chat before sending.', 'success'); }); } });

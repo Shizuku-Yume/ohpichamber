@@ -10,9 +10,9 @@ import AppIntents
 // Gated to iOS 18.0 to match the control, so the app's 15.5 deployment target stays clean.
 @available(iOS 18.0, *)
 struct NewSessionShortcutIntent: AppIntent {
-    static let title: LocalizedStringResource = "New OpenChamber Session"
+    static let title: LocalizedStringResource = "New OhPiChamber Session"
     static let description = IntentDescription(
-        "Opens OpenChamber on a new session. With a message, starts the session in the project and sends the message."
+        "Opens OhPiChamber on a new session. With a message, starts the session in the project and sends the message."
     )
     static let openAppWhenRun: Bool = true
 

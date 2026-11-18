@@ -14,7 +14,7 @@ Une identité git est le nom et l’adresse e-mail que portent vos commits, et l
 3. Choisissez une **Authentification**, c’est-à-dire comment elle pousse et tire :
    - **Cette machine** : ce que Git utilise déjà sur cette machine, comme des clés SSH, un gestionnaire d’identifiants ou la CLI `gh`
    - **Compte** : le **Compte de gestion de code** que vous choisissez, n’importe quel compte connecté sur une carte d’hébergeur dans [Intégrations](/integrations/), comme GitHub, GitLab, Gitea, Forgejo ou Gerrit ; les push passent par HTTPS avec le jeton de ce compte
-   - **SSH** : une clé qu’OpenChamber garde pour cette identité
+   - **SSH** : une clé qu’OhPiChamber garde pour cette identité
    - **Anonyme** : lit les dépôts publics en HTTPS sans connexion, et ne peut pas pousser
 4. Donnez-lui éventuellement une couleur et une icône pour la repérer facilement.
 
@@ -26,11 +26,11 @@ Sur Gerrit, une identité de compte se connecte à Git avec votre nom d’utilis
 
 Choisissez le bouton d’identité en haut du [panneau Git](/git/) et sélectionnez-en une. Les écrans d’ajout et de clonage proposent le même choix. Une identité qui ne peut pas atteindre le dépôt reste dans la liste, désactivée, avec la raison : un compte sur un autre hébergeur, un compte ou **Anonyme** sur un remote SSH, ou une clé SSH sur un remote HTTPS.
 
-Appliquer une identité l’écrit dans la configuration git **locale** de ce dépôt. Elle ne touche donc que ce dépôt, et votre réglage global reste tel quel. Git dans le terminal et le shell de l’agent l’utilisent aussi. **Identité système** retire ce qu’OpenChamber a écrit, et votre propre configuration Git reprend la main.
+Appliquer une identité l’écrit dans la configuration git **locale** de ce dépôt. Elle ne touche donc que ce dépôt, et votre réglage global reste tel quel. Git dans le terminal et le shell de l’agent l’utilisent aussi. **Identité système** retire ce qu’OhPiChamber a écrit, et votre propre configuration Git reprend la main.
 
 ## Phrases secrètes des clés SSH
 
-Pour une clé SSH chiffrée, saisissez sa phrase secrète facultative avant de rechercher dans `~/.ssh`, puis confirmez son empreinte et ajoutez la clé. OpenChamber conserve la clé chiffrée et enregistre la phrase secrète dans le stockage des identifiants du Host. Les phrases enregistrées servent uniquement aux actions Git dans l'application. Les commandes Git du terminal ou des agents ne les récupèrent pas. Une clé gérée chiffrée ne peut donc pas s'authentifier par cette voie.
+Pour une clé SSH chiffrée, saisissez sa phrase secrète facultative avant de rechercher dans `~/.ssh`, puis confirmez son empreinte et ajoutez la clé. OhPiChamber conserve la clé chiffrée et enregistre la phrase secrète dans le stockage des identifiants du Host. Les phrases enregistrées servent uniquement aux actions Git dans l'application. Les commandes Git du terminal ou des agents ne les récupèrent pas. Une clé gérée chiffrée ne peut donc pas s'authentifier par cette voie.
 
 ## Pages liées
 

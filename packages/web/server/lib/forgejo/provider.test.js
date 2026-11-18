@@ -87,7 +87,7 @@ describe('Forgejo provider authentication', () => {
     const { forgejo } = await setup(forkNetworkRoutes({ 'GET /version': { version: '6.0.14+gitea-1.20.5' } }));
 
     await expect(forgejo.auth.connectToken({ instance: ORIGIN, token: 'pat-1' })).rejects.toMatchObject({
-      sourceControlResponse: { status: 400, body: { code: 'UNSUPPORTED_PROVIDER_VERSION', error: 'Forgejo 6.0.14+gitea-1.20.5 is older than OpenChamber supports (7.0)' } },
+      sourceControlResponse: { status: 400, body: { code: 'UNSUPPORTED_PROVIDER_VERSION', error: 'Forgejo 6.0.14+gitea-1.20.5 is older than OhPiChamber supports (7.0)' } },
     });
   });
 });

@@ -579,7 +579,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
           {leadConnection || pendingConnection ? (
             <header className="flex items-center gap-2 px-1 pb-4 pt-2">
               {logo(24)}
-              <span className="typography-ui-label font-semibold">OpenChamber</span>
+              <span className="typography-ui-label font-semibold">OhPiChamber</span>
             </header>
           ) : null}
           {body}

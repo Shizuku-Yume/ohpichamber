@@ -1,11 +1,11 @@
 ---
 title: Kit de UI
-description: Botones, campos, desplegables, pestañas, listas y otros componentes de ohpichamber-sdk/ui que hacen que una extensión se vea como el resto de OpenChamber.
+description: Botones, campos, desplegables, pestañas, listas y otros componentes de ohpichamber-sdk/ui que hacen que una extensión se vea como el resto de OhPiChamber.
 ---
 
 # Kit de UI
 
-`ohpichamber-sdk/ui` es un conjunto de controles listos para usar que emplean los colores, fuentes y espaciados de la app, para que tu extensión se vea como el resto de OpenChamber sin copiar sus estilos. Cada control es una función: le das un elemento que te pertenece y su configuración, se dibuja ahí y devuelve `{ update, dispose }`. Tú combinas los controles en una pantalla y conservas los datos. El kit nunca llama a tu proveedor ni a OpenChamber; sigues llamando tú a `host.request`, `host.attach` y el resto. Puedes escribir tu propio HTML y CSS para todo lo que el kit no cubra, pero recurre primero al kit: sus controles siguen automáticamente el tema, los espaciados y los hábitos de teclado del usuario, así que un panel construido con ellos se siente parte de OpenChamber y no un sitio web dentro de la app.
+`ohpichamber-sdk/ui` es un conjunto de controles listos para usar que emplean los colores, fuentes y espaciados de la app, para que tu extensión se vea como el resto de OhPiChamber sin copiar sus estilos. Cada control es una función: le das un elemento que te pertenece y su configuración, se dibuja ahí y devuelve `{ update, dispose }`. Tú combinas los controles en una pantalla y conservas los datos. El kit nunca llama a tu proveedor ni a OhPiChamber; sigues llamando tú a `host.request`, `host.attach` y el resto. Puedes escribir tu propio HTML y CSS para todo lo que el kit no cubra, pero recurre primero al kit: sus controles siguen automáticamente el tema, los espaciados y los hábitos de teclado del usuario, así que un panel construido con ellos se siente parte de OhPiChamber y no un sitio web dentro de la app.
 
 ## Llama primero a `applyHostReady`
 
@@ -29,9 +29,9 @@ Para tu propio CSS, `applyHostReady` proporciona `--primary-text`, `--success-te
 
 `onReady` puede ejecutarse varias veces mientras el panel está abierto, por ejemplo al cambiar el contexto de sesión. Aplica el tema en cada llamada, pero monta controles y registra listeners solo una vez. Guarda los borradores fuera de las funciones de renderizado. Al cambiar de pestaña, oculta los paneles existentes o restaura sus valores desde el estado.
 
-## Qué cambia cuando OpenChamber se actualiza
+## Qué cambia cuando OhPiChamber se actualiza
 
-Los colores, bordes, radios de esquina y los estados de hover, selección y foco de los controles del kit vienen de la versión de OpenChamber que ejecuta tu extensión, así que siguen a la app tras una actualización sin recompilar. Los tamaños y espaciados se quedan como los de tu bundle compilado, para que tu diseño no se mueva; cambian cuando recompilas con un SDK más nuevo. OpenChamber añade sus estilos después de tu documento, así que para cambiar el aspecto de un control del kit usa un selector más específico que el del kit, como `#root .oc-sdk-btn`.
+Los colores, bordes, radios de esquina y los estados de hover, selección y foco de los controles del kit vienen de la versión de OhPiChamber que ejecuta tu extensión, así que siguen a la app tras una actualización sin recompilar. Los tamaños y espaciados se quedan como los de tu bundle compilado, para que tu diseño no se mueva; cambian cuando recompilas con un SDK más nuevo. OhPiChamber añade sus estilos después de tu documento, así que para cambiar el aspecto de un control del kit usa un selector más específico que el del kit, como `#root .oc-sdk-btn`.
 
 ## Sincroniza la selección y los campos
 
@@ -142,7 +142,7 @@ host.onReady((ctx) => {
 
 ## Enlaces en el texto del proveedor
 
-Tu página se ejecuta en un entorno aislado y no puede abrir una pestaña nueva por sí misma. Cuando uses `mountText`, pasa `onOpenUrl` y entrega el enlace a OpenChamber:
+Tu página se ejecuta en un entorno aislado y no puede abrir una pestaña nueva por sí misma. Cuando uses `mountText`, pasa `onOpenUrl` y entrega el enlace a OhPiChamber:
 
 ```ts
 import { mountText } from "ohpichamber-sdk/ui";

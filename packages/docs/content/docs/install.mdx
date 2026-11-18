@@ -1,6 +1,6 @@
 ---
 title: Install
-description: Install OpenChamber for desktop, web, or mobile.
+description: Install OhPiChamber for desktop, web, or mobile.
 ---
 
 # Install
@@ -13,18 +13,18 @@ Pick the app that fits how you work:
 
 ## Desktop
 
-Download the latest build from the [download page](https://openchamber.dev/download/) or [GitHub Releases](https://github.com/openchamber/openchamber/releases/latest), then open it. Linux builds come as `.deb`, `.rpm`, and AppImage.
+Download the latest build from the [GitHub Releases](https://github.com/Shizuku-Yume/ohpichamber/releases/latest), then open it. Linux builds come as `.deb`, `.rpm`, and AppImage.
 
 ## Web + PWA
 
-Running OpenChamber requires Node.js 24.14+ for the Host Gateway, Bun 1.3.14+ on PATH for the Agent Service, and git.
+Running OhPiChamber requires Node.js 24.14+ for the Host Gateway, Bun 1.3.14+ on PATH for the Agent Service, and git.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/openchamber/openchamber/main/scripts/install.sh | bash
-openchamber --ui-password be-creative-here
+curl -fsSL https://raw.githubusercontent.com/Shizuku-Yume/ohpichamber/main/scripts/install.sh | bash
+ohpichamber --ui-password be-creative-here
 ```
 
-Open the URL the CLI prints (usually `http://localhost:3000`). Enter your UI password on the login screen to sign in. Once signed in, you will see the OpenChamber session list. To keep it handy, use your browser's "Install" option in the address bar to add it as an app.
+Open the URL the CLI prints (usually `http://localhost:3000`). Enter your UI password on the login screen to sign in. Once signed in, you will see the OhPiChamber session list. To keep it handy, use your browser's "Install" option in the address bar to add it as an app.
 
 Install the iPhone app through TestFlight or the Android app from the latest release, then pair it with your computer. [Mobile Apps](/mobile/) walks through both.
 
@@ -34,11 +34,11 @@ Install the iPhone app through TestFlight or the Android app from the latest rel
 
 ## Nix
 
-On NixOS, or any Linux with Nix, the flake in the OpenChamber repository builds the same apps:
+On NixOS, or any Linux with Nix, the flake in the OhPiChamber repository builds the same apps:
 
 ```bash
-nix run github:openchamber/openchamber        # web server on http://localhost:3000
-nix run github:openchamber/openchamber#gui    # desktop app
+nix run github:Shizuku-Yume/ohpichamber        # web server on http://localhost:3000
+nix run github:Shizuku-Yume/ohpichamber#gui    # desktop app
 ```
 
 The flake also exposes `packages.openchamber` and `packages.openchamber-desktop`, and a `nixosModules.openchamber` systemd module with `host`, `port`, `openFirewall` and `uiPasswordFile`. The password file is read through systemd's `LoadCredential`, so a root-owned 0400 secret works with the default dynamic user.

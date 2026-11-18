@@ -5,7 +5,7 @@ description: Escolha, sessão por sessão, quanto o agente pode fazer sem pergun
 
 # Permissões e rede de segurança
 
-Cada ação do agente (executar um comando, editar um arquivo, chamar uma ferramenta MCP, buscar uma página) é avaliada pelo autorizador do Host e pela política de worker do Agent Service. Os modos de permissão do OpenChamber decidem o que acontece quando uma ação requer aprovação.
+Cada ação do agente (executar um comando, editar um arquivo, chamar uma ferramenta MCP, buscar uma página) é avaliada pelo autorizador do Host e pela política de worker do Agent Service. Os modos de permissão do OhPiChamber decidem o que acontece quando uma ação requer aprovação.
 
 ## Allow, ask e deny
 
@@ -23,7 +23,7 @@ Para configurar quais ferramentas um agente pode ver e chamar, use o campo **fer
 | --- | --- |
 | **Perguntar sempre** | Você. Cada pedido espera a sua resposta. |
 | **Rede de segurança** | O Jev deixa passar as ações rotineiras e guarda as arriscadas para você. |
-| **Aceitar tudo** | O OpenChamber, sempre com sim. Cada pedido é permitido na hora, sem verificação. |
+| **Aceitar tudo** | O OhPiChamber, sempre com sim. Cada pedido é permitido na hora, sem verificação. |
 
 **Aceitar tudo** não precisa de mais nada: esse modo simplesmente trata cada "ask" como permitido. Use quando você confia na tarefa e não quer interrupções.
 
@@ -36,7 +36,7 @@ Os subagentes seguem a sessão que os iniciou.
 
 ## A rede de segurança
 
-Nesse modo, o OpenChamber pergunta ao [Jev](/pt-br/classification-providers/) sobre cada pedido: é rotina ou a decisão é sua? Ler, compilar, rodar testes, editar arquivos do projeto e fazer commits comuns passam. Reescrever o histórico do git, apagar dados, mudar o sistema, fazer deploy, publicar algo em outro lugar ou enviar arquivos para fora esperam por você, assim como tudo o que não estiver claro.
+Nesse modo, o OhPiChamber pergunta ao [Jev](/pt-br/classification-providers/) sobre cada pedido: é rotina ou a decisão é sua? Ler, compilar, rodar testes, editar arquivos do projeto e fazer commits comuns passam. Reescrever o histórico do git, apagar dados, mudar o sistema, fazer deploy, publicar algo em outro lugar ou enviar arquivos para fora esperam por você, assim como tudo o que não estiver claro.
 
 Um pedido retido mostra o cartão de permissão de sempre com uma linha a mais, **A rede de segurança reteve esta ação para você decidir**, e o tipo de ação. Se o Jev não responder em quatro segundos, a ação também espera por você. A rede de segurança nunca permite algo só porque a verificação falhou.
 
@@ -44,7 +44,7 @@ A rede de segurança precisa de um [provedor de classificação](/pt-br/classifi
 
 ## Continua funcionando enquanto você está fora
 
-O modo fica no servidor do OpenChamber, então continua respondendo aos pedidos depois que você fecha a aba ou bloqueia o celular, e sobrevive a reinicializações.
+O modo fica no servidor do OhPiChamber, então continua respondendo aos pedidos depois que você fecha a aba ou bloqueia o celular, e sobrevive a reinicializações.
 
 
 ## Relacionado

@@ -1,11 +1,11 @@
 ---
 title: UI-Kit
-description: Buttons, Felder, Dropdowns, Tabs, Listen und andere Bausteine aus ohpichamber-sdk/ui, mit denen eine Erweiterung wie der Rest von OpenChamber aussieht.
+description: Buttons, Felder, Dropdowns, Tabs, Listen und andere Bausteine aus ohpichamber-sdk/ui, mit denen eine Erweiterung wie der Rest von OhPiChamber aussieht.
 ---
 
 # UI-Kit
 
-`ohpichamber-sdk/ui` ist ein Satz fertiger Bedienelemente, die Farben, Schriften und Abstände der App verwenden. So sieht deine Erweiterung aus wie der Rest von OpenChamber, ohne dass du dessen Styles kopierst. Jedes Element ist eine Funktion: Du gibst ihr ein Element, das dir gehört, und seine Einstellungen; sie zeichnet sich dort und liefert `{ update, dispose }` zurück. Du setzt die Elemente zu einem Bildschirm zusammen und behältst die Daten bei dir. Das Kit ruft nie deinen Provider oder OpenChamber auf; `host.request`, `host.attach` und den Rest rufst du weiterhin selbst. Für alles, was das Kit nicht bietet, kannst du eigenes HTML und CSS schreiben, aber greif zuerst zum Kit: Seine Elemente folgen automatisch dem Theme, den Abständen und den Tastaturgewohnheiten des Nutzers, sodass ein daraus gebautes Panel wie ein Teil von OpenChamber wirkt und nicht wie eine Website darin.
+`ohpichamber-sdk/ui` ist ein Satz fertiger Bedienelemente, die Farben, Schriften und Abstände der App verwenden. So sieht deine Erweiterung aus wie der Rest von OhPiChamber, ohne dass du dessen Styles kopierst. Jedes Element ist eine Funktion: Du gibst ihr ein Element, das dir gehört, und seine Einstellungen; sie zeichnet sich dort und liefert `{ update, dispose }` zurück. Du setzt die Elemente zu einem Bildschirm zusammen und behältst die Daten bei dir. Das Kit ruft nie deinen Provider oder OhPiChamber auf; `host.request`, `host.attach` und den Rest rufst du weiterhin selbst. Für alles, was das Kit nicht bietet, kannst du eigenes HTML und CSS schreiben, aber greif zuerst zum Kit: Seine Elemente folgen automatisch dem Theme, den Abständen und den Tastaturgewohnheiten des Nutzers, sodass ein daraus gebautes Panel wie ein Teil von OhPiChamber wirkt und nicht wie eine Website darin.
 
 ## Zuerst `applyHostReady` aufrufen
 
@@ -29,9 +29,9 @@ Für eigenes CSS stellt `applyHostReady` die Variablen `--primary-text`, `--succ
 
 `onReady` kann bei geöffneter Seite mehrfach laufen, etwa wenn sich der Sitzungskontext ändert. Wende das Theme jedes Mal an, aber mounte Controls und registriere Listener nur einmal. Bewahre Entwürfe außerhalb der Renderfunktionen auf. Blende beim Tabwechsel vorhandene Panels aus oder stelle ihre Werte aus deinem Zustand wieder her.
 
-## Was sich ändert, wenn OpenChamber aktualisiert wird
+## Was sich ändert, wenn OhPiChamber aktualisiert wird
 
-Farben, Rahmen, Eckenradien sowie die Hover-, Auswahl- und Fokuszustände der Kit-Elemente kommen aus der OpenChamber-Version, in der deine Erweiterung läuft. Nach einem Update folgen sie also der App, ohne dass du neu bauen musst. Größen und Abstände bleiben die, mit denen dein Bundle gebaut wurde, damit sich dein Layout nicht verschiebt; sie ändern sich, wenn du gegen ein neueres SDK neu baust. OpenChamber fügt seine Styles nach deinem Dokument ein. Um ein Kit-Element umzugestalten, nimm also einen Selektor, der spezifischer ist als der des Kits, etwa `#root .oc-sdk-btn`.
+Farben, Rahmen, Eckenradien sowie die Hover-, Auswahl- und Fokuszustände der Kit-Elemente kommen aus der OhPiChamber-Version, in der deine Erweiterung läuft. Nach einem Update folgen sie also der App, ohne dass du neu bauen musst. Größen und Abstände bleiben die, mit denen dein Bundle gebaut wurde, damit sich dein Layout nicht verschiebt; sie ändern sich, wenn du gegen ein neueres SDK neu baust. OhPiChamber fügt seine Styles nach deinem Dokument ein. Um ein Kit-Element umzugestalten, nimm also einen Selektor, der spezifischer ist als der des Kits, etwa `#root .oc-sdk-btn`.
 
 ## Auswahl und Eingaben synchron halten
 
@@ -142,7 +142,7 @@ host.onReady((ctx) => {
 
 ## Links aus Provider-Text
 
-Deine Seite läuft in einer Sandbox und kann nicht selbst einen neuen Tab öffnen. Wenn du `mountText` verwendest, gib `onOpenUrl` mit und reiche den Link an OpenChamber weiter:
+Deine Seite läuft in einer Sandbox und kann nicht selbst einen neuen Tab öffnen. Wenn du `mountText` verwendest, gib `onOpenUrl` mit und reiche den Link an OhPiChamber weiter:
 
 ```ts
 import { mountText } from "ohpichamber-sdk/ui";

@@ -1,32 +1,32 @@
 ---
 title: Environment Değişkenleri
-description: Ortam değişkenleriyle OpenChamber'ı yapılandırın.
+description: Ortam değişkenleriyle OhPiChamber'ı yapılandırın.
 ---
 
 # Environment Değişkenleri
 
-OpenChamber bu environment değişkenlerini başlangıçta okur. Başlangıç servisleri için `ohpichamber startup enable` varsayılan olarak mevcut environment'ı anlık görüntü olarak kaydeder. Servisin kullanmasını istediğiniz değişkenleri değiştirdikten sonra bunu yeniden çalıştırın.
+OhPiChamber bu environment değişkenlerini başlangıçta okur. Başlangıç servisleri için `ohpichamber startup enable` varsayılan olarak mevcut environment'ı anlık görüntü olarak kaydeder. Servisin kullanmasını istediğiniz değişkenleri değiştirdikten sonra bunu yeniden çalıştırın.
 
 ## Agent oturumları, Git ve terminal için değişkenler
 
-Agent oturumlarına, Git'e, terminale ve [proje eylemlerine](/tr/project-actions/) API token'ı ya da veritabanı adresi gibi kendi değişkenlerinizi vermek için, bunları OpenChamber başlamadan önce export etmek yerine **Ayarlar → Genel → Ortam değişkenleri** bölümüne ekleyin. Değerler OpenChamber'ı çalıştıran makinede, veri dizinindeki `environment.json` dosyasında kalır ve onları yalnızca sizin kullanıcınız okuyabilir. Ayarlar bir değeri bir daha asla göstermez: değeri değiştirebilir ya da silebilirsiniz ama geri okuyamazsınız.
+Agent oturumlarına, Git'e, terminale ve [proje eylemlerine](/tr/project-actions/) API token'ı ya da veritabanı adresi gibi kendi değişkenlerinizi vermek için, bunları OhPiChamber başlamadan önce export etmek yerine **Ayarlar → Genel → Ortam değişkenleri** bölümüne ekleyin. Değerler OhPiChamber'ı çalıştıran makinede, veri dizinindeki `environment.json` dosyasında kalır ve onları yalnızca sizin kullanıcınız okuyabilir. Ayarlar bir değeri bir daha asla göstermez: değeri değiştirebilir ya da silebilirsiniz ama geri okuyamazsınız.
 
 - Agent oturumları bunları başlarken alır.
 - Git, terminal ve proje eylemleri bunları bir sonraki çalıştırmada alır.
 
 Bir proje kendi değişkenlerini ya da bunları yazdıran `direnv export json` gibi bir komutu **Ayarlar → Projeler** bölümünde ekleyebilir. [Projeler](/tr/projects/#proje-ortamı) sayfasına bakın.
 
-Aşağıdaki her şeyi OpenChamber başlangıçta kendisi okur.
+Aşağıdaki her şeyi OhPiChamber başlangıçta kendisi okur.
 
-## OpenChamber sunucusu
+## OhPiChamber sunucusu
 
 ### `OPENCHAMBER_HOST`
 
-OpenChamber web sunucusu için bind adresi. Diğer makinelerden erişime izin vermek için `0.0.0.0` kullanın.
+OhPiChamber web sunucusu için bind adresi. Diğer makinelerden erişime izin vermek için `0.0.0.0` kullanın.
 
 ### `OPENCHAMBER_LAN_URL`
 
-Ağınızdaki diğer cihazların OpenChamber'a ulaştığı adres, örneğin `http://192.168.1.20:3000`. Eşleştirme bağlantıları ve QR kodları, OpenChamber'ın kendi algıladığı adres yerine bunu sunar. Bu algılama yanlış olduğunda ayarlayın; örneğin Docker'da OpenChamber yalnızca konteynerin iç adresini görür.
+Ağınızdaki diğer cihazların OhPiChamber'a ulaştığı adres, örneğin `http://192.168.1.20:3000`. Eşleştirme bağlantıları ve QR kodları, OhPiChamber'ın kendi algıladığı adres yerine bunu sunar. Bu algılama yanlış olduğunda ayarlayın; örneğin Docker'da OhPiChamber yalnızca konteynerin iç adresini görür.
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,19 +42,19 @@ Güvendiğiniz bir cihazda oturumun kaç gün geçerli kalacağı. Varsayılan `
 
 ### `OPENCHAMBER_API_ONLY`
 
-`true` ya da `1` olarak ayarlandığında OpenChamber'ı headless modda başlatır. API rotaları masaüstü ve mobil istemciler için açık kalır, ama tarayıcı arayüzü sunulmaz.
+`true` ya da `1` olarak ayarlandığında OhPiChamber'ı headless modda başlatır. API rotaları masaüstü ve mobil istemciler için açık kalır, ama tarayıcı arayüzü sunulmaz.
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-OpenChamber'ı kendi sayfalarındaki bir çerçevede gösterebilecek origin'ler, boşlukla ayrılmış, örneğin `https://dash.example.com`. `*` her siteye izin verir. Varsayılan olarak yalnızca OpenChamber'ın kendisi ve masaüstü ile mobil uygulamaları onu gömebilir; böylece başka siteler düğmelerinin üstüne bir şey yerleştiremez.
+OhPiChamber'ı kendi sayfalarındaki bir çerçevede gösterebilecek origin'ler, boşlukla ayrılmış, örneğin `https://dash.example.com`. `*` her siteye izin verir. Varsayılan olarak yalnızca OhPiChamber'ın kendisi ve masaüstü ile mobil uygulamaları onu gömebilir; böylece başka siteler düğmelerinin üstüne bir şey yerleştiremez.
 
 ### `OPENCHAMBER_DATA_DIR`
 
-OpenChamber veri dizinini geçersiz kılar. Varsayılan `~/.config/ohpichamber`.
+OhPiChamber veri dizinini geçersiz kılar. Varsayılan `~/.config/ohpichamber`.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-OpenChamber'ın projesiz sohbetler için oluşturduğu yönetilen sohbet dizinlerinin yerini değiştirir. Varsayılan `~/.config/ohpichamber/chats` dizinidir. Mevcut sohbetler taşınmaz.
+OhPiChamber'ın projesiz sohbetler için oluşturduğu yönetilen sohbet dizinlerinin yerini değiştirir. Varsayılan `~/.config/ohpichamber/chats` dizinidir. Mevcut sohbetler taşınmaz.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -72,21 +72,21 @@ API yanıt sıkıştırmasını kontrol eder. `true` ya da `1` ile zorla açın,
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-OpenChamber’ın kendi giden isteklerini, örneğin kullanım limitlerini ve skill kataloglarını, bir proxy üzerinden gönderir. Küçük harfli adlar da çalışır. `NO_PROXY` içindeki sunucular doğrudan bağlanır; `localhost`, `127.0.0.1` ve `::1` her zaman doğrudan bağlanır, böylece oturum açma geri çağrıları ve yerel bağlantılar çalışmaya devam eder.
+OhPiChamber’ın kendi giden isteklerini, örneğin kullanım limitlerini ve skill kataloglarını, bir proxy üzerinden gönderir. Küçük harfli adlar da çalışır. `NO_PROXY` içindeki sunucular doğrudan bağlanır; `localhost`, `127.0.0.1` ve `::1` her zaman doğrudan bağlanır, böylece oturum açma geri çağrıları ve yerel bağlantılar çalışmaya devam eder.
 
 ## Terminal ve Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-OpenChamber terminal oturumları için kullanılan shell yürütülebilir dosyası.
+OhPiChamber terminal oturumları için kullanılan shell yürütülebilir dosyası.
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-OpenChamber Git özelliklerinin kullandığı Git yürütülebilir dosyası.
+OhPiChamber Git özelliklerinin kullandığı Git yürütülebilir dosyası.
 
 ### `GIT_BINARY`
 
-Alternatif Git yürütülebilir dosyası geçersiz kılma değeri. OpenChamber'a özel yapılandırma için `OPENCHAMBER_GIT_BINARY` tercih edin.
+Alternatif Git yürütülebilir dosyası geçersiz kılma değeri. OhPiChamber'a özel yapılandırma için `OPENCHAMBER_GIT_BINARY` tercih edin.
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -96,7 +96,7 @@ Git destekli dosya okumaları için önbelleğin milisaniye cinsinden yaşam sü
 
 ### `OPENAI_API_KEY`
 
-OpenChamber ses özelliklerinin doğrudan OpenAI'yi çağırırken kullandığı API anahtarı. Özel bir OpenAI uyumlu sunucuya asla gönderilmez: o sunucuya Ayarlar'da kendi anahtarını verin.
+OhPiChamber ses özelliklerinin doğrudan OpenAI'yi çağırırken kullandığı API anahtarı. Özel bir OpenAI uyumlu sunucuya asla gönderilmez: o sunucuya Ayarlar'da kendi anahtarını verin.
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -104,15 +104,15 @@ OpenChamber ses özelliklerinin doğrudan OpenAI'yi çağırırken kullandığı
 
 ### `NGROK_AUTHTOKEN`
 
-OpenChamber tunnel komutlarının kullandığı ngrok auth token. `ngrok config add-authtoken <token>` ile de yapılandırabilirsiniz.
+OhPiChamber tunnel komutlarının kullandığı ngrok auth token. `ngrok config add-authtoken <token>` ile de yapılandırabilirsiniz.
 
 ## Runtime yardımcıları
 
 ### `BUN_BINARY`
 
-Daemon süreçleri başlatılırken OpenChamber'ın kullanması gereken Bun yürütülebilir dosyası.
+Daemon süreçleri başlatılırken OhPiChamber'ın kullanması gereken Bun yürütülebilir dosyası.
 
 ### `BUN_INSTALL`
 
-Bun kurulum kökü. OpenChamber bunu daemon başlangıcı ve güncellemeleri için `bin/bun` bulmakta kullanır.
+Bun kurulum kökü. OhPiChamber bunu daemon başlangıcı ve güncellemeleri için `bin/bun` bulmakta kullanır.
 

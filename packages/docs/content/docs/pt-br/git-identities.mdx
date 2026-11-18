@@ -14,7 +14,7 @@ Uma identidade git é o nome e o e-mail que seus commits levam, e a forma como u
 3. Em **Autenticação**, escolha como ela faz push e pull:
    - **Esta máquina**: o que o Git desta máquina já usa, como chaves SSH, um gerenciador de credenciais ou a CLI `gh`
    - **Conta**: a **Conta de controle de código** que você escolher, qualquer conta conectada num cartão de host em [Integrações](/pt-br/integrations/), como GitHub, GitLab, Gitea, Forgejo ou Gerrit; o push vai por HTTPS com o token dessa conta
-   - **SSH**: uma chave que o OpenChamber guarda para esta identidade
+   - **SSH**: uma chave que o OhPiChamber guarda para esta identidade
    - **Anônimo**: lê repositórios públicos por HTTPS sem entrar, e não consegue fazer push
 4. Opcionalmente, dê a ela uma cor e um ícone para ser fácil de identificar.
 
@@ -26,11 +26,11 @@ No Gerrit, uma identidade de conta entra no Git com seu nome de usuário do Gerr
 
 Escolha o botão de identidade no topo do [painel Git](/pt-br/git/) e selecione uma. As telas de adicionar e clonar oferecem a mesma escolha. Uma identidade que não consegue alcançar o repositório continua na lista, desativada, com o motivo: uma conta em outro host, uma conta ou **Anônimo** num remoto SSH, ou uma chave SSH num remoto HTTPS.
 
-Aplicar uma identidade a escreve na configuração git **local** daquele repositório, então afeta só aquele repositório e sua configuração global fica como está. O Git no terminal e o shell do agente também a usam. **Identidade do sistema** remove o que o OpenChamber escreveu, e sua própria configuração do Git volta a valer.
+Aplicar uma identidade a escreve na configuração git **local** daquele repositório, então afeta só aquele repositório e sua configuração global fica como está. O Git no terminal e o shell do agente também a usam. **Identidade do sistema** remove o que o OhPiChamber escreveu, e sua própria configuração do Git volta a valer.
 
 ## Senhas de chaves SSH
 
-Para uma chave SSH criptografada, digite a senha opcional antes de buscar em `~/.ssh`. Depois, confirme a impressão digital e adicione a chave. O OpenChamber mantém a chave criptografada e salva a senha no armazenamento de credenciais do Host. As senhas salvas funcionam apenas nas ações do Git no aplicativo. Comandos do Git no terminal ou executados por agentes não as recuperam, portanto uma chave gerenciada criptografada não pode se autenticar por esse caminho.
+Para uma chave SSH criptografada, digite a senha opcional antes de buscar em `~/.ssh`. Depois, confirme a impressão digital e adicione a chave. O OhPiChamber mantém a chave criptografada e salva a senha no armazenamento de credenciais do Host. As senhas salvas funcionam apenas nas ações do Git no aplicativo. Comandos do Git no terminal ou executados por agentes não as recuperam, portanto uma chave gerenciada criptografada não pode se autenticar por esse caminho.
 
 ## Relacionado
 

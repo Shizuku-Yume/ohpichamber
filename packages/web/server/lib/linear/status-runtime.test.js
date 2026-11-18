@@ -75,7 +75,7 @@ describe('Linear session status runtime', () => {
     await vi.waitFor(() => {
       const commentCalls = graphql.mock.calls.filter(([, options]) => JSON.parse(options.body).query.includes('mutation CommentCreate'));
       expect(commentCalls).toHaveLength(1);
-      expect(JSON.parse(commentCalls[0][1].body).variables.input.body).toContain('OpenChamber session failed');
+      expect(JSON.parse(commentCalls[0][1].body).variables.input.body).toContain('OhPiChamber session failed');
     });
     runtime.stop();
   });

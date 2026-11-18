@@ -334,7 +334,7 @@ export function createGerritResourceService({
           if (branch.ref.startsWith('refs/heads/')) names.push(branch.ref.slice('refs/heads/'.length));
         }
         if (!result.hasMore) return names;
-        if (start + BRANCH_PAGE >= COLLECTION_MAX_ITEMS) throw malformed('Gerrit project has more branches than OpenChamber reads');
+        if (start + BRANCH_PAGE >= COLLECTION_MAX_ITEMS) throw malformed('Gerrit project has more branches than OhPiChamber reads');
       }
     },
 

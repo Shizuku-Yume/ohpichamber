@@ -5,15 +5,15 @@ description: Permettez à un agent de répartir une grosse tâche entre de nombr
 
 # Workflows
 
-Un workflow découpe une grosse tâche en nombreux petits morceaux et confie chaque morceau à son propre agent. L'agent de votre session écrit un court script qui indique quels agents lancer et ce qu'il faut demander à chacun. OpenChamber exécute le script en arrière-plan, et votre session reste libre pendant que les agents travaillent. À la fin de l'exécution, son rapport revient dans la session.
+Un workflow découpe une grosse tâche en nombreux petits morceaux et confie chaque morceau à son propre agent. L'agent de votre session écrit un court script qui indique quels agents lancer et ce qu'il faut demander à chacun. OhPiChamber exécute le script en arrière-plan, et votre session reste libre pendant que les agents travaillent. À la fin de l'exécution, son rapport revient dans la session.
 
 Les workflows conviennent au travail fait de nombreux morceaux semblables et indépendants : la revue de chaque fichier modifié, l'audit de chaque route d'API, une migration sur de nombreux fichiers, ou une recherche où chaque source est vérifiée séparément. Une seule fonctionnalité ou quelques étapes vont plus vite dans une seule session.
 
 ## L'activer
 
-L'outil de workflows est désactivé par défaut. Ouvrez **Paramètres → Général → Outils OpenChamber** et activez **Outil de workflows**. Les sessions en cours le reçoivent à leur prochain tour ; le désactiver retire l'outil et les instructions qui le concernent de toutes les sessions, et masque le panneau Workflows. Les exécutions existantes reviennent quand vous le réactivez.
+L'outil de workflows est désactivé par défaut. Ouvrez **Paramètres → Général → Outils OhPiChamber** et activez **Outil de workflows**. Les sessions en cours le reçoivent à leur prochain tour ; le désactiver retire l'outil et les instructions qui le concernent de toutes les sessions, et masque le panneau Workflows. Les exécutions existantes reviennent quand vous le réactivez.
 
-Workflows run through OpenChamber's local Agent Service in the background.
+Workflows run through OhPiChamber's local Agent Service in the background.
 
 ## Lancer un workflow
 
@@ -49,6 +49,6 @@ Lancez un workflow enregistré depuis **Workflows enregistrés** dans le sélect
 
 ## Voir aussi
 
-- [Outil de contrôle pour les agents](/fr/agent-control-tool/) : les autres outils OpenChamber que reçoivent les agents
+- [Outil de contrôle pour les agents](/fr/agent-control-tool/) : les autres outils OhPiChamber que reçoivent les agents
 - [Notes, todos et plans de projet](/fr/notes-todos-plans/) : les outils de connaissances du projet et de mémoire
 - [Utilisation et quotas](/fr/usage/) : ce que coûtent vos sessions

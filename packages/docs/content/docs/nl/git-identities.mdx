@@ -14,7 +14,7 @@ Een Git-identiteit bestaat uit de naam en het e-mailadres die bij uw commits wor
 3. Kies een **Authenticatiemethode**, de manier waarop de identiteit pusht en pullt:
    - **Deze computer:** wat Git op deze computer al gebruikt, zoals SSH-sleutels, een credential manager of de `gh` CLI
    - **Account:** het **Source control-account** dat u kiest. Dat kan elk account zijn dat op een hostkaart bij [Integraties](/nl/integrations/) is verbonden, zoals GitHub, GitLab, Gitea, Forgejo of Gerrit. Pushes gaan via HTTPS met het token van dat account.
-   - **SSH:** een sleutel die OpenChamber voor deze identiteit bewaart
+   - **SSH:** een sleutel die OhPiChamber voor deze identiteit bewaart
    - **Anoniem:** leest openbare repositories via HTTPS zonder aanmelding en kan niet pushen
 4. Geef de identiteit eventueel een kleur en pictogram om haar makkelijk te herkennen.
 
@@ -26,11 +26,11 @@ Op Gerrit meldt een accountidentiteit zich bij Git aan met uw Gerrit-gebruikersn
 
 Kies de identiteitsknop bovenaan de [Git-weergave](/nl/git/) en kies een identiteit. De schermen voor toevoegen en klonen bieden dezelfde keuze. Een identiteit die de repository niet kan bereiken, blijft uitgeschakeld in de lijst staan, met de reden: een account op een andere host, een account of **Anoniem** bij een SSH-remote, of een SSH-sleutel bij een HTTPS-remote.
 
-Toepassen schrijft de identiteit naar de **lokale** Git-configuratie van de repository. Alleen die repository verandert, uw algemene instelling blijft gelijk. Git in de terminal en de shell van de agent gebruiken haar ook. **Systeemidentiteit** verwijdert wat OpenChamber heeft geschreven, zodat uw eigen Git-configuratie weer geldt.
+Toepassen schrijft de identiteit naar de **lokale** Git-configuratie van de repository. Alleen die repository verandert, uw algemene instelling blijft gelijk. Git in de terminal en de shell van de agent gebruiken haar ook. **Systeemidentiteit** verwijdert wat OhPiChamber heeft geschreven, zodat uw eigen Git-configuratie weer geldt.
 
 ## Wachtwoordzinnen voor SSH-sleutels
 
-Voer voor een versleutelde SSH-sleutel de optionele wachtwoordzin in voordat je in `~/.ssh` zoekt. Bevestig daarna de vingerafdruk en voeg de sleutel toe. OpenChamber houdt de sleutel versleuteld en slaat de wachtwoordzin op in de referentieopslag van de Host. Opgeslagen wachtwoordzinnen werken alleen voor Git-acties in de app. Git-opdrachten in de terminal of van agents halen ze niet op. Een versleutelde beheerde sleutel kan zich via die route dus niet aanmelden.
+Voer voor een versleutelde SSH-sleutel de optionele wachtwoordzin in voordat je in `~/.ssh` zoekt. Bevestig daarna de vingerafdruk en voeg de sleutel toe. OhPiChamber houdt de sleutel versleuteld en slaat de wachtwoordzin op in de referentieopslag van de Host. Opgeslagen wachtwoordzinnen werken alleen voor Git-acties in de app. Git-opdrachten in de terminal of van agents halen ze niet op. Een versleutelde beheerde sleutel kan zich via die route dus niet aanmelden.
 
 ## Zie ook
 

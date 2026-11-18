@@ -1,11 +1,11 @@
 ---
 title: UI kiti
-description: "ohpichamber-sdk/ui içindeki düğmeler, alanlar, açılır listeler, sekmeler, listeler ve diğer yapı taşları; bir eklentiyi OpenChamber'ın geri kalanı gibi gösterir."
+description: "ohpichamber-sdk/ui içindeki düğmeler, alanlar, açılır listeler, sekmeler, listeler ve diğer yapı taşları; bir eklentiyi OhPiChamber'ın geri kalanı gibi gösterir."
 ---
 
 # UI kiti
 
-`ohpichamber-sdk/ui`, uygulamanın renklerini, yazı tiplerini ve boşluklarını kullanan hazır kontroller kümesidir; böylece eklentiniz stilleri kopyalamadan OpenChamber'ın geri kalanı gibi görünür. Her kontrol bir fonksiyondur: ona size ait bir öğe ve ayarlarını verirsiniz, kendini oraya çizer ve `{ update, dispose }` döndürür. Kontrolleri bir ekrana siz yerleştirir, veriyi siz tutarsınız. Kit sağlayıcınızı ya da OpenChamber'ı asla çağırmaz; `host.request`, `host.attach` ve diğerlerini yine kendiniz çağırırsınız. Kitte olmayan her şey için kendi HTML ve CSS'inizi yazabilirsiniz, ama önce kite başvurun: kontrolleri kullanıcının temasını, boşluklarını ve klavye alışkanlıklarını kendiliğinden izler; böylece onlarla kurulan bir panel içine gömülü bir web sitesi gibi değil, OpenChamber'ın bir parçası gibi hissedilir.
+`ohpichamber-sdk/ui`, uygulamanın renklerini, yazı tiplerini ve boşluklarını kullanan hazır kontroller kümesidir; böylece eklentiniz stilleri kopyalamadan OhPiChamber'ın geri kalanı gibi görünür. Her kontrol bir fonksiyondur: ona size ait bir öğe ve ayarlarını verirsiniz, kendini oraya çizer ve `{ update, dispose }` döndürür. Kontrolleri bir ekrana siz yerleştirir, veriyi siz tutarsınız. Kit sağlayıcınızı ya da OhPiChamber'ı asla çağırmaz; `host.request`, `host.attach` ve diğerlerini yine kendiniz çağırırsınız. Kitte olmayan her şey için kendi HTML ve CSS'inizi yazabilirsiniz, ama önce kite başvurun: kontrolleri kullanıcının temasını, boşluklarını ve klavye alışkanlıklarını kendiliğinden izler; böylece onlarla kurulan bir panel içine gömülü bir web sitesi gibi değil, OhPiChamber'ın bir parçası gibi hissedilir.
 
 ## Önce `applyHostReady` çağırın
 
@@ -29,9 +29,9 @@ Kendi CSS'iniz için `applyHostReady`; `--primary-text`, `--success-text`, `--wa
 
 `onReady`, panel açıkken oturum bağlamı değişiklikleri dahil birçok kez çalışabilir. Temayı her çağrıda uygulayın, ancak kontrolleri ve dinleyicileri yalnızca bir kez oluşturun. Taslak değerlerini çizim fonksiyonlarının dışında tutun. Sekme değiştirirken mevcut panelleri gizleyin veya değerlerini durumdan geri yükleyin.
 
-## OpenChamber güncellenince ne değişir
+## OhPiChamber güncellenince ne değişir
 
-Kit kontrollerinin renkleri, kenarlıkları, köşe yarıçapları ve üzerine gelme, seçim ve odak durumları, eklentinizi çalıştıran OpenChamber sürümünden gelir; böylece bir güncellemeden sonra yeniden derlemeden uygulamayı izlerler. Boyutlar ve boşluklar paketinizin derlendiği hâliyle kalır, bu yüzden düzeniniz kaymaz; daha yeni bir SDK ile yeniden derlediğinizde değişirler. OpenChamber kendi stillerini belgenizden sonra ekler; bir kit kontrolünün görünümünü değiştirmek için `#root .oc-sdk-btn` gibi kitinkinden daha özgül bir seçici kullanın.
+Kit kontrollerinin renkleri, kenarlıkları, köşe yarıçapları ve üzerine gelme, seçim ve odak durumları, eklentinizi çalıştıran OhPiChamber sürümünden gelir; böylece bir güncellemeden sonra yeniden derlemeden uygulamayı izlerler. Boyutlar ve boşluklar paketinizin derlendiği hâliyle kalır, bu yüzden düzeniniz kaymaz; daha yeni bir SDK ile yeniden derlediğinizde değişirler. OhPiChamber kendi stillerini belgenizden sonra ekler; bir kit kontrolünün görünümünü değiştirmek için `#root .oc-sdk-btn` gibi kitinkinden daha özgül bir seçici kullanın.
 
 ## Seçimi ve giriş alanlarını eşitleyin
 
@@ -142,7 +142,7 @@ host.onReady((ctx) => {
 
 ## Sağlayıcı metnindeki bağlantılar
 
-Sayfanız bir sandbox içinde çalışır ve kendi başına yeni sekme açamaz. `mountText` kullanırken `onOpenUrl` verin ve bağlantıyı OpenChamber'a bırakın:
+Sayfanız bir sandbox içinde çalışır ve kendi başına yeni sekme açamaz. `mountText` kullanırken `onOpenUrl` verin ve bağlantıyı OhPiChamber'a bırakın:
 
 ```ts
 import { mountText } from "ohpichamber-sdk/ui";

@@ -155,7 +155,7 @@ export function createGiteaFamilyProvider({
     const { version, supported, edition: probed } = await probeGiteaVersion({ origin, token, fetch: fetchImpl, timeoutMs, label });
     return supported
       ? { version, supported, edition: probed }
-      : { version, supported, edition: probed, message: `${label} ${version} is older than OpenChamber supports (${edition.minimum})` };
+      : { version, supported, edition: probed, message: `${label} ${version} is older than OhPiChamber supports (${edition.minimum})` };
   };
   /**
    * An instance belongs to the edition its own API namespace names, else the

@@ -613,7 +613,7 @@ function parseArgs(argv = process.argv.slice(2)) {
 
 function showHelp() {
   console.log(`
- OpenChamber - Host Gateway and web interface for the OMP Agent Service
+ OhPiChamber - Host Gateway and web interface for the OMP Agent Service
 
 USAGE:
   ohpichamber [COMMAND] [OPTIONS]
@@ -624,13 +624,13 @@ COMMANDS:
   restart        Stop and start the server
   status         Show server status
   schedule       Manage scheduled tasks
-  session        Create, inspect, and read OpenChamber sessions
+  session        Create, inspect, and read OhPiChamber sessions
   models         Show default and favorite models
   projects       Show configured projects and IDs
-  control        Show OpenChamber control-plane commands
+  control        Show OhPiChamber control-plane commands
   tunnel         Tunnel lifecycle commands
   startup        Manage launch at system startup
-  logs           Tail OpenChamber logs
+  logs           Tail OhPiChamber logs
   connect-url    Generate URL/QR for connecting another client
 
 OPTIONS:
@@ -654,7 +654,7 @@ ENVIRONMENT:
   OPENCHAMBER_UI_SESSION_TTL_HOURS        Browser sign-in lifetime in hours (default: 12)
   OPENCHAMBER_UI_TRUSTED_SESSION_TTL_DAYS Sign-in lifetime on a trusted device in days (default: 7)
   OPENCHAMBER_API_ONLY         Set to true/1 to start API routes only
-  OPENCHAMBER_DATA_DIR         Override OpenChamber data directory
+  OPENCHAMBER_DATA_DIR         Override OhPiChamber data directory
 
 EXAMPLES:
   ohpichamber                    # Start in daemon mode on default port 3000 (or free port)
@@ -662,9 +662,9 @@ EXAMPLES:
   ohpichamber --lan --port 3002  # Start on LAN at 0.0.0.0:3002
   ohpichamber serve --foreground # Start in foreground (for systemd Type=simple)
   ohpichamber connect-url --port 3000 --qr
-  ohpichamber connect-url --server https://openchamber.example.com
+  ohpichamber connect-url --server https://ohpichamber.example.com
   ohpichamber control           # Show control-plane commands for agents/scripts
-  ohpichamber startup enable     # Start OpenChamber at user login
+  ohpichamber startup enable     # Start OhPiChamber at user login
   ohpichamber tunnel help        # Show tunnel lifecycle help
   ohpichamber logs               # Follow logs for latest running instance
 `);
@@ -672,13 +672,13 @@ EXAMPLES:
 
 function showControlHelp() {
   console.log(`
- OpenChamber Control Commands
+ OhPiChamber Control Commands
 
 USAGE:
   ohpichamber <COMMAND> [OPTIONS]
 
 COMMANDS:
-  status                         Show running OpenChamber runtimes
+  status                         Show running OhPiChamber runtimes
   session                        Create, inspect, and read sessions
   models                         Show default and favorite models
   projects                       Show configured projects and IDs
@@ -697,7 +697,7 @@ DETAILED HELP:
 COMMON OPTIONS:
   --json                         Output machine-readable JSON
   -q, --quiet                    Print minimal output
-  -p, --port <port>              Target a specific OpenChamber runtime
+  -p, --port <port>              Target a specific OhPiChamber runtime
   --ui-password <password>       Authenticate to a password-protected runtime
 
 EXAMPLES:
@@ -711,7 +711,7 @@ EXAMPLES:
 
 function showStartupHelp() {
   console.log(`
- OpenChamber Startup Commands
+ OhPiChamber Startup Commands
 
 USAGE:
   ohpichamber startup <SUBCOMMAND> [OPTIONS]
@@ -740,14 +740,14 @@ EXAMPLES:
 
 function showConnectUrlHelp() {
   console.log(`
- OpenChamber Connect URL
+ OhPiChamber Connect URL
 
 USAGE:
   ohpichamber connect-url [OPTIONS]
 
 DESCRIPTION:
   Generate an ohpichamber:// connection link for adding this server to another
-  OpenChamber app. If no server is running on the selected port, it starts one.
+  OhPiChamber app. If no server is running on the selected port, it starts one.
 
 OPTIONS:
   -p, --port <port>       Server port to use or start (default: ${DEFAULT_PORT})
@@ -772,7 +772,7 @@ OPTIONS:
 EXAMPLES:
   ohpichamber connect-url --port 3000 --qr
   ohpichamber connect-url --port 3000 --api-only --lan --server http://workstation.local:3000 --qr
-  ohpichamber connect-url --server https://openchamber.example.com --name Workstation
+  ohpichamber connect-url --server https://ohpichamber.example.com --name Workstation
   ohpichamber connect-url --relay --name "My laptop"
 `);
 }
@@ -795,7 +795,7 @@ SUBCOMMANDS:
   profile     Manage saved managed-remote profiles
 
 COMMON OPTIONS:
-  -p, --port              Target OpenChamber instance port
+  -p, --port              Target OhPiChamber instance port
   --host                  Bind address when auto-starting an instance
   --lan                   Bind to 0.0.0.0 when auto-starting an instance
   --ui-password [password] Protect browser UI when auto-starting an instance (generates one when omitted)
@@ -826,7 +826,7 @@ OUTPUT OPTIONS:
   --json                  Output machine-readable JSON
 
 BEHAVIOR NOTES:
-  - One active tunnel per OpenChamber instance.
+  - One active tunnel per OhPiChamber instance.
   - Starting a different mode/provider replaces the current tunnel and revokes old connect links/sessions.
   - Connect links are one-time; generating a new link revokes the previous unused link.
 
@@ -928,7 +928,7 @@ _ohpichamber() {
     'models:Show default and favorite models'
     'projects:Show configured projects and IDs'
     'tunnel:Tunnel lifecycle commands'
-    'logs:Tail OpenChamber logs'
+    'logs:Tail OhPiChamber logs'
   )
 
   tunnel_commands=(
@@ -974,7 +974,7 @@ _ohpichamber() {
   esac
 }
 
-compdef _ohpichamber openchamber
+compdef _ohpichamber ohpichamber
 `;
   }
 

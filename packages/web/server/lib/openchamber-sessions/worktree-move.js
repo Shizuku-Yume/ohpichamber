@@ -105,7 +105,7 @@ export const createSessionWorktreeMover = (dependencies) => {
    * words `stashPush` does not recognise.
    */
   const carryChanges = async ({ source, destination, sessionId, name, paths }) => {
-    const message = `OpenChamber: session ${sessionId} moved to worktree ${name}`;
+    const message = `OhPiChamber: session ${sessionId} moved to worktree ${name}`;
     const before = new Set((await listStashes(source)).map((entry) => entry.hash));
     await stashPush(source, { message, paths: paths.map((filePath) => path.resolve(source, filePath)) });
     let stash;

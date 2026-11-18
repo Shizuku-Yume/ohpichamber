@@ -256,7 +256,7 @@ export const createWorkflowRuntime = ({
   };
 
   const assertEnabled = async () => {
-    if (!await isEnabled()) throw new OpenChamberControlError('Workflows are turned off in OpenChamber settings', 403);
+    if (!await isEnabled()) throw new OpenChamberControlError('Workflows are turned off in OhPiChamber settings', 403);
   };
 
   const requireRun = async (runId, parentSessionId) => {
@@ -940,9 +940,9 @@ export const createWorkflowRuntime = ({
             }
           }
           for (const agent of run.agents) {
-            if (agent.state === 'running' || agent.state === 'queued') Object.assign(agent, { state: 'stopped', error: 'OpenChamber restarted' });
+            if (agent.state === 'running' || agent.state === 'queued') Object.assign(agent, { state: 'stopped', error: 'OhPiChamber restarted' });
           }
-          await settleRun(run, 'stopped', { error: 'OpenChamber restarted while the workflow ran.', resume: false });
+          await settleRun(run, 'stopped', { error: 'OhPiChamber restarted while the workflow ran.', resume: false });
         } catch (error) {
           console.warn(`[workflows] could not recover run ${run.id}; completion report withheld:`, error?.message ?? error);
           announce(run, { immediate: true });
@@ -954,7 +954,7 @@ export const createWorkflowRuntime = ({
 
   const shutdown = () => {
     for (const execution of active.values()) {
-      execution.stopReason ??= 'OpenChamber shut down while the workflow ran.';
+      execution.stopReason ??= 'OhPiChamber shut down while the workflow ran.';
       execution.sandbox?.terminate();
     }
   };

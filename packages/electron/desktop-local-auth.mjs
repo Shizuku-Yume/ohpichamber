@@ -43,7 +43,7 @@ const createLocalDesktopClient = async ({ url, fetchImpl, persistToken }) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        label: 'OpenChamber Desktop',
+        label: 'OhPiChamber Desktop',
         clientKind: 'desktop-local',
         dedupeKey: 'desktop-local',
       }),

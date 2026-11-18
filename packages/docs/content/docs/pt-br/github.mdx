@@ -1,13 +1,13 @@
 ---
 title: "Hosts Git: issues e pull requests"
-description: Conecte GitHub, GitLab, Gitea, Forgejo ou Gerrit e trabalhe com issues e pull requests no OpenChamber.
+description: Conecte GitHub, GitLab, Gitea, Forgejo ou Gerrit e trabalhe com issues e pull requests no OhPiChamber.
 ---
 
 # Hosts Git: issues e pull requests
 
-Conecte uma conta no host onde seu projeto está e o OpenChamber pode listar as issues e pull requests dele, iniciar uma sessão a partir de um item, e abrir, revisar e fazer merge de pull requests para você. Cinco hosts vêm integrados: GitHub, incluindo o GitHub Enterprise; GitLab, incluindo o GitLab self-managed; Gitea; Forgejo, incluindo o Codeberg; e Gerrit. Uma [extensão](/pt-br/extensions/#uma-extensão-como-host-git) pode adicionar outro.
+Conecte uma conta no host onde seu projeto está e o OhPiChamber pode listar as issues e pull requests dele, iniciar uma sessão a partir de um item, e abrir, revisar e fazer merge de pull requests para você. Cinco hosts vêm integrados: GitHub, incluindo o GitHub Enterprise; GitLab, incluindo o GitLab self-managed; Gitea; Forgejo, incluindo o Codeberg; e Gerrit. Uma [extensão](/pt-br/extensions/#uma-extensão-como-host-git) pode adicionar outro.
 
-O remoto do projeto decide com qual host o OpenChamber conversa. Um projeto cujo `origin` está no gitlab.com usa sua conta do GitLab para o quadro, o selo de pull request nos branches e o painel Git. Um remoto num alias de host do `~/.ssh/config`, como `github.com-work`, não é associado a nenhum host. Gitea e Forgejo associam um alias cuja configuração SSH aponta para o endereço web da instância, e um remoto no endereço de clone SSH da instância assim que você informar esse endereço em **Settings → Integrations**.
+O remoto do projeto decide com qual host o OhPiChamber conversa. Um projeto cujo `origin` está no gitlab.com usa sua conta do GitLab para o quadro, o selo de pull request nos branches e o painel Git. Um remoto num alias de host do `~/.ssh/config`, como `github.com-work`, não é associado a nenhum host. Gitea e Forgejo associam um alias cuja configuração SSH aponta para o endereço web da instância, e um remoto no endereço de clone SSH da instância assim que você informar esse endereço em **Settings → Integrations**.
 
 Os termos seguem o host. O GitLab diz merge request, e o Gerrit diz change (alteração).
 
@@ -21,7 +21,7 @@ Os termos seguem o host. O GitLab diz merge request, e o Gerrit diz change (alte
    - **Forgejo**: para o Codeberg, cole um personal access token; para outro servidor, adicione o endereço dele primeiro.
    - **Gerrit**: adicione o endereço do seu servidor e depois seu nome de usuário do Gerrit e uma senha HTTP.
 
-Quando estiver conectado, sua conta aparece no cartão. Você pode conectar mais de uma conta num host e alternar entre elas, ou desconectar a qualquer momento. Se a CLI `gh` estiver logada na mesma máquina, o OpenChamber também pode usá-la para o GitHub. Os escopos que cada token precisa e as versões que cada host exige estão em [Integrações](/pt-br/integrations/#gitlab-gitea-forgejo-e-gerrit).
+Quando estiver conectado, sua conta aparece no cartão. Você pode conectar mais de uma conta num host e alternar entre elas, ou desconectar a qualquer momento. Se a CLI `gh` estiver logada na mesma máquina, o OhPiChamber também pode usá-la para o GitHub. Os escopos que cada token precisa e as versões que cada host exige estão em [Integrações](/pt-br/integrations/#gitlab-gitea-forgejo-e-gerrit).
 
 Uma conta conectada também pode ser a [identidade Git](/pt-br/git-identities/) do projeto, assim os commits levam o nome dela e o push por HTTPS usa o token dela.
 
@@ -29,7 +29,7 @@ Uma conta conectada também pode ser a [identidade Git](/pt-br/git-identities/) 
 
 Quando você cria uma [sessão de worktree](/pt-br/worktrees/), pode iniciá-la a partir de uma issue ou de um pull request do host do projeto:
 
-- escolha uma **issue** e o OpenChamber nomeia o branch a partir dela
+- escolha uma **issue** e o OhPiChamber nomeia o branch a partir dela
 - escolha um **pull request** e ele faz checkout do branch do pull request; você pode incluir o diff para que o agente tenha a mudança inteira
 - escolha uma **alteração do Gerrit** e ele faz checkout do último patchset num branch chamado `change-<number>`
 
@@ -39,7 +39,7 @@ O quadro [Issues e PRs](/pt-br/issues-and-prs/) lista os mesmos itens, com filtr
 
 ## Abrir e gerenciar pull requests
 
-Pela aba **PR** no [painel Git](/pt-br/git/), você pode criar um pull request, atualizá-lo, marcar um rascunho como pronto ou fazer merge. O OpenChamber pode escrever o título e a descrição a partir das suas mudanças.
+Pela aba **PR** no [painel Git](/pt-br/git/), você pode criar um pull request, atualizá-lo, marcar um rascunho como pronto ou fazer merge. O OhPiChamber pode escrever o título e a descrição a partir das suas mudanças.
 
 - **GitLab**: a mesma aba abre merge requests. O merge oferece merge e squash.
 - **Gitea** e **Forgejo**: igual ao GitHub.

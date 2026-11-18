@@ -1366,7 +1366,7 @@ const formatWorktreePopulateError = (message) => {
  return [
   text,
   'The worktree checkout path exceeds this system\'s path-length limit.',
-  'OpenChamber enables Git `core.longpaths` for worktree population; if this still fails on Windows, enable OS long paths (LongPathsEnabled) or open the repository from a shorter absolute path.',
+  'OhPiChamber enables Git `core.longpaths` for worktree population; if this still fails on Windows, enable OS long paths (LongPathsEnabled) or open the repository from a shorter absolute path.',
  ].join('\n');
 };
 
@@ -4452,7 +4452,7 @@ export async function stashPush(directory, options = {}) {
  const { git } = await createRepositoryGitContext(directory);
  const message = typeof options.message === 'string' && options.message.trim()
   ? options.message.trim()
-  : `OpenChamber stash ${new Date().toISOString()}`;
+  : `OhPiChamber stash ${new Date().toISOString()}`;
  // Named paths are taken literally, so a name like `*.ts` matches only itself.
  const paths = Array.isArray(options.paths) ? options.paths : [];
  const output = await git.raw(paths.length > 0
@@ -7047,9 +7047,9 @@ const assertRunSnapshotRef = (ref) => {
 };
 
 const SNAPSHOT_IDENTITY_ENV = {
- GIT_AUTHOR_NAME: 'OpenChamber',
+ GIT_AUTHOR_NAME: 'OhPiChamber',
  GIT_AUTHOR_EMAIL: 'snapshot@openchamber.local',
- GIT_COMMITTER_NAME: 'OpenChamber',
+ GIT_COMMITTER_NAME: 'OhPiChamber',
  GIT_COMMITTER_EMAIL: 'snapshot@openchamber.local',
 };
 
@@ -7132,7 +7132,7 @@ export async function snapshotWorktree(directory, input = {}) {
   throw new Error('Worktree directory is required');
  }
  const ref = assertRunSnapshotRef(input?.ref);
- return writeWorktreeSnapshot(worktreeDirectory, { ref, message: 'OpenChamber run snapshot' });
+ return writeWorktreeSnapshot(worktreeDirectory, { ref, message: 'OhPiChamber run snapshot' });
 }
 
 // Archived worktrees. The archive is the ref: `refs/openchamber/archive/<id>`

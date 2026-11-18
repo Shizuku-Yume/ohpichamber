@@ -5,7 +5,7 @@ description: Połącz dostawców AI, wybierz modele i skonfiguruj agentów.
 
 # Dostawcy, modele i agenci
 
-Zanim OpenChamber cokolwiek zrobi, potrzebuje co najmniej jednego połączonego dostawcy AI. Ta strona opisuje łączenie dostawcy, wybór modelu i dostosowywanie agentów.
+Zanim OhPiChamber cokolwiek zrobi, potrzebuje co najmniej jednego połączonego dostawcy AI. Ta strona opisuje łączenie dostawcy, wybór modelu i dostosowywanie agentów.
 
 ## Połącz dostawcę
 
@@ -13,7 +13,7 @@ Zanim OpenChamber cokolwiek zrobi, potrzebuje co najmniej jednego połączonego 
 2. Otwórz menu **Add provider** i wybierz dostawcę, który nie jest jeszcze połączony.
 3. Zaloguj się na jeden z dwóch sposobów, zależnie od dostawcy:
    - **Klucz API** — wklej swój klucz i zapisz.
-   - **Logowanie OAuth** — otwórz link autoryzacyjny w przeglądarce, aby się zalogować. Jeśli pojawi się monit, wklej kod autoryzacji do OpenChamber i dokończ łączenie.
+   - **Logowanie OAuth** — otwórz link autoryzacyjny w przeglądarce, aby się zalogować. Jeśli pojawi się monit, wklej kod autoryzacji do OhPiChamber i dokończ łączenie.
 
 ### Dostawcy niestandardowi i inni
 
@@ -23,7 +23,7 @@ Dla bramek, lokalnych modeli LLM, Ollama, LiteLLM i podobnych interfejsów API z
 2. Wprowadź identyfikator dostawcy, nazwę wyświetlaną, bazowy URL (`http://` lub `https://`), opcjonalny klucz API oraz co najmniej jeden identyfikator i nazwę modelu.
 3. Podaj okno kontekstu i maksymalną liczbę tokenów wyjściowych modelu. Zaawansowane metadane (takie jak opcje rozumowania, warianty i modalności) można skonfigurować w formacie JSON w szczegółach modelu.
 4. Opcjonalnie dodaj nagłówki żądań.
-5. Zapisz — OpenChamber rejestruje dostawcę i modele za pośrednictwem usługi Agent Service, przechowując klucze API jako poświadczenia tylko do zapisu.
+5. Zapisz — OhPiChamber rejestruje dostawcę i modele za pośrednictwem usługi Agent Service, przechowując klucze API jako poświadczenia tylko do zapisu.
 6. Aby zmodyfikować istniejącego dostawcę niestandardowego, otwórz go i wybierz **Edit**.
 
 Klucz API jest opcjonalny. Lokalne punkty końcowe bez klucza (takie jak Ollama, LiteLLM czy llama.cpp) oraz usługi korzystające z uwierzytelniania w nagłówkach mogą łączyć się bez klucza API.

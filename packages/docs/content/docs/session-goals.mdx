@@ -5,7 +5,7 @@ description: Turn a prompt into a goal the agent keeps working toward automatica
 
 # Session Goals
 
-Goals are implemented by OMP's goal mode in the Agent Service worker. The agent owns continuation and declares completion; OpenChamber does not run a second supervisor or independent auditor.
+Goals are implemented by OMP's goal mode in the Agent Service worker. The agent owns continuation and declares completion; OhPiChamber does not run a second supervisor or independent auditor.
 
 A goal turns one prompt into a finish line. OMP continues the session toward that objective until the agent reports completion, the token budget is exhausted, no progress is possible, or you stop it.
 
@@ -36,7 +36,7 @@ For small contextual follow-ups you don't need a goal — just send a normal mes
 
 ## How it works
 
-After the agent stops and the session stays quiet for a moment, OpenChamber:
+After the agent stops and the session stays quiet for a moment, OhPiChamber:
 
 1. Asks a small, cheap model to audit the latest turn against the objective: keep going, done, or stuck?
 2. If the verdict is "keep going", it sends a continuation prompt and the agent picks the work back up.
@@ -68,7 +68,7 @@ In **Settings → Chat → Goal** you can set a default token budget for new goa
 
 ## Keep in mind
 
-- Goal mode runs in the OMP session worker, not in a separate OpenChamber server-side supervisor.
+- Goal mode runs in the OMP session worker, not in a separate OhPiChamber server-side supervisor.
 - OMP owns continuation, completion, budget, and no-progress decisions.
 - One goal per session at a time.
 

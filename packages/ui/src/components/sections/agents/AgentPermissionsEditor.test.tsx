@@ -69,12 +69,15 @@ const render = async (
 test('a tool whose catalog label only repeats its id renders its name once', async () => {
   const view = await render([
     // The service builds a Host tool's label by capitalising the id.
+    { name: 'bash', label: 'Bash', description: 'Run commands', tier: 'exec', availability: true },
     { name: 'openchamber', label: 'Openchamber', description: 'Host actions', tier: 'exec', availability: true },
   ]);
-  expect(view.textContent).not.toContain('(openchamber)');
-  expect(view.textContent).not.toContain('Openchamber (openchamber)');
-  // The row still names the tool, using the transcript's presentation label.
-  expect(view.textContent).toContain('OpenChamber');
+  expect(view.textContent).not.toContain('(bash)');
+  expect(view.textContent).not.toContain('Bash (bash)');
+  expect(view.textContent).toContain('Bash');
+  // The host tool keeps its rebranded presentation label beside the raw tool id.
+  expect(view.textContent).toContain('OhPiChamber');
+  expect(view.textContent).toContain('(openchamber)');
 });
 
 test('a tool whose label adds information keeps the id beside it', async () => {

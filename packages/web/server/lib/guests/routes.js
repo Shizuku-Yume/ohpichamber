@@ -177,7 +177,7 @@ export const renderOauthCallbackPage = ({ title, message }) => `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} — OpenChamber</title>
+<title>${escapeHtml(title)} — OhPiChamber</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -701,7 +701,7 @@ export const registerGuestRoutes = (app, {
         error: queryValue(req, 'error'),
         errorDescription: queryValue(req, 'error_description'),
       });
-      finish(200, 'Connected', 'You can close this tab and return to OpenChamber.');
+      finish(200, 'Connected', 'You can close this tab and return to OhPiChamber.');
     } catch (error) {
       if (error instanceof GuestOAuthError) {
         return finish(400, 'Could not connect', error.message);

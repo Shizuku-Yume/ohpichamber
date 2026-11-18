@@ -1,15 +1,15 @@
 ---
 title: Reverse proxy
-description: Skonfiguruj OpenChamber poprawnie za Nginx, Nginx Proxy Manager lub innym reverse proxy.
+description: Skonfiguruj OhPiChamber poprawnie za Nginx, Nginx Proxy Manager lub innym reverse proxy.
 ---
 
 # Reverse proxy
 
-Skorzystaj z tej strony, jeśli uruchamiasz OpenChamber za Nginx, Nginx Proxy Manager, Caddy, Cloudflare lub innym reverse proxy.
+Skorzystaj z tej strony, jeśli uruchamiasz OhPiChamber za Nginx, Nginx Proxy Manager, Caddy, Cloudflare lub innym reverse proxy.
 
 ## Zanim ustawisz proxy
 
-1. Najpierw potwierdź, że OpenChamber działa bezpośrednio.
+1. Najpierw potwierdź, że OhPiChamber działa bezpośrednio.
 2. Otwórz `http://<server-ip>:3000` lub swój własny port z tej samej sieci.
 3. Dodaj reverse proxy dopiero, gdy połączenie bezpośrednie działa.
 
@@ -32,14 +32,14 @@ Skorzystaj z tej strony, jeśli uruchamiasz OpenChamber za Nginx, Nginx Proxy Ma
 
 - Włącz proxy WebSocket.
 - Wyłącz buforowanie na trasach SSE.
-- Wyłącz gzip na proxy, jeśli OpenChamber już kompresuje odpowiedzi.
+- Wyłącz gzip na proxy, jeśli OhPiChamber już kompresuje odpowiedzi.
 - Utrzymuj kompresję włączoną tylko w jednej warstwie.
 - Przekazuj zwykłe nagłówki proxy, takie jak `Host`, `X-Forwarded-For` i `X-Forwarded-Proto`.
 - Zwiększ limity rozmiaru treści, jeśli użytkownicy przesyłają pliki.
 
 ## Szybka lista kontrolna
 
-- OpenChamber dostępny bezpośrednio w LAN
+- OhPiChamber dostępny bezpośrednio w LAN
 - WebSockets włączone w proxy
 - trasy SSE mają wyłączone buforowanie
 - `gzip off` na hoście proxy lub kompresja proxy wyłączona w inny sposób
@@ -327,9 +327,9 @@ Caddy obsługuje uaktualnienia WebSocket automatycznie — żadna dodatkowa konf
 
 ## Proxy z logowaniem (Authentik, Authelia, oauth2-proxy)
 
-Jeśli użytkownicy logują się w proxy, zanim dotrą do OpenChamber, panele rozszerzeń potrzebują jednego wyjątku. Panel działa w izolowanej ramce, a przeglądarka nie dołącza ciasteczka logowania proxy do własnych żądań tej ramki. Proxy przekierowuje więc pliki panelu na swoją stronę logowania i panel pozostaje pusty.
+Jeśli użytkownicy logują się w proxy, zanim dotrą do OhPiChamber, panele rozszerzeń potrzebują jednego wyjątku. Panel działa w izolowanej ramce, a przeglądarka nie dołącza ciasteczka logowania proxy do własnych żądań tej ramki. Proxy przekierowuje więc pliki panelu na swoją stronę logowania i panel pozostaje pusty.
 
-Przepuść `/api/guest-files/` bez logowania. Ta ścieżka zwraca tylko pliki zainstalowanych rozszerzeń i tylko przez link, który OpenChamber wydaje zalogowanemu użytkownikowi dla tego panelu. Nie otwiera niczego innego. Dla Nginx z `auth_request`:
+Przepuść `/api/guest-files/` bez logowania. Ta ścieżka zwraca tylko pliki zainstalowanych rozszerzeń i tylko przez link, który OhPiChamber wydaje zalogowanemu użytkownikowi dla tego panelu. Nie otwiera niczego innego. Dla Nginx z `auth_request`:
 
 ```nginx
 location ^~ /api/guest-files/ {
@@ -338,13 +338,13 @@ location ^~ /api/guest-files/ {
 }
 ```
 
-W innych proxy dodaj regułę, która pomija logowanie dla tego samego prefiksu ścieżki. Nie wyłączaj `/api/guests/`: ta ścieżka także instaluje rozszerzenia i obsługuje ich żądania, a bez hasła interfejsu OpenChamber każdy mógłby z niej korzystać.
+W innych proxy dodaj regułę, która pomija logowanie dla tego samego prefiksu ścieżki. Nie wyłączaj `/api/guests/`: ta ścieżka także instaluje rozszerzenia i obsługuje ich żądania, a bez hasła interfejsu OhPiChamber każdy mógłby z niej korzystać.
 
 ## Ostrzeżenie o CDN i podwójnej kompresji
 
 Jeśli umieścisz CDN (np. Cloudflare) przed swoim reverse proxy, pamiętaj o podwójnej kompresji:
 
-- OpenChamber kompresuje odpowiedzi HTTP za pomocą gzip (próg 1 KB).
+- OhPiChamber kompresuje odpowiedzi HTTP za pomocą gzip (próg 1 KB).
 - Cloudflare i inne CDN-y również domyślnie kompresują odpowiedzi.
 - Może to powodować podwójnie skompresowane odpowiedzi lub nieprawidłowe nagłówki `Content-Encoding`.
 
@@ -354,7 +354,7 @@ Aby tego uniknąć, wyłącz kompresję w **jednej** warstwie:
 - **Nginx:** `gzip off` (już pokazane w przykładach powyżej).
 - **Caddy:** Caddy domyślnie nie kompresuje ponownie, jeśli upstream już wysyła skompresowaną treść.
 
-Trasy strumieniowania SSE są wyłączone z kompresji przez OpenChamber, ale CDN może je nadal buforować. Sprawdź dokumentację swojego CDN, jak wyłączyć buforowanie na ścieżkach SSE.
+Trasy strumieniowania SSE są wyłączone z kompresji przez OhPiChamber, ale CDN może je nadal buforować. Sprawdź dokumentację swojego CDN, jak wyłączyć buforowanie na ścieżkach SSE.
 
 ## Powiązane
 

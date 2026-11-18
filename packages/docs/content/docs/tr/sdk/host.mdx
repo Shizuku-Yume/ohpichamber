@@ -1,6 +1,6 @@
 ---
 title: Host API
-description: Bir eklentinin çağırabileceği her connectHost metodu, OpenChamber'ın ona gönderdikleri, sınırlar ve hata kodları.
+description: Bir eklentinin çağırabileceği her connectHost metodu, OhPiChamber'ın ona gönderdikleri, sınırlar ve hata kodları.
 ---
 
 # Host API
@@ -13,11 +13,11 @@ import { connectHost, HostRequestError } from "ohpichamber-sdk";
 const host = connectHost();
 ```
 
-`connectHost`, `window` yoksa `HOST_UNAVAILABLE` fırlatır. OpenChamber dışında, her çağrısı `HOST_UNAVAILABLE` ile reddedilen bir istemci döndürür. Sayfayı kapatırken `dispose()` çağırın; hâlâ süren çağrılar aynı kodla reddedilir.
+`connectHost`, `window` yoksa `HOST_UNAVAILABLE` fırlatır. OhPiChamber dışında, her çağrısı `HOST_UNAVAILABLE` ile reddedilen bir istemci döndürür. Sayfayı kapatırken `dispose()` çağırın; hâlâ süren çağrılar aynı kodla reddedilir.
 
-## OpenChamber'ın size gönderdikleri
+## OhPiChamber'ın size gönderdikleri
 
-`onReady` ilk anlık görüntüyle tetiklenir ve OpenChamber onu her yenilediğinde yeniden tetiklenir.
+`onReady` ilk anlık görüntüyle tetiklenir ve OhPiChamber onu her yenilediğinde yeniden tetiklenir.
 
 Bu, yalnızca bir kez çalışan bir bağlama callback'i değildir. Arayüzü ve abonelikleri bir kez oluşturun; sonraki çağrılarda alanları veya taslakları değiştirmeden temayı ve bağlamı güncelleyin. [UI kit](/sdk/ui/) sayfasındaki korumalı örneğe bakın. `onConnection` gibi dinleyiciler mevcut değeri hemen iletir ve yeni görüntülerde aynı değeri tekrar iletebilir. Yeni istekten önce ilgili alanları karşılaştırın ve yerini yeni isteklerin aldığı eski yanıtları yok sayın.
 
@@ -65,12 +65,12 @@ Erişim token'ları burada da, `request` sonucunda da asla görünmez.
 | `generate({ prompt, system?, maxOutputTokens? })` | kullanıcının Small Model'inden tek seferlik metin. `{ text }` döndürür. `model` yeteneği gerekir. |
 | `onResolve(handler)` | eğik çizgi komutlarınız için işleyiciyi kaydeder. `{ command, args }` alır ve iliştirilecek bir öğe ya da `null` döndürür. |
 | `setBadge(count)` | şerit simgenizi bir noktayla işaretler ve sayıyı (0 ile 999 arası) ipucunda gösterir, `null` ile temizler |
-| `openCommit(sha)` | geçerli projenin o commit'inde Diff görünümünü açar. `sha` 7 ile 64 onaltılık karakterdir; commit'i OpenChamber kendisi okur. |
-| `setHeight(px)` | Work Status bölümünüzün yüksekliğini ayarlar. OpenChamber bunu 24 ile 320 piksel arasında tutar; daha uzun içerik sayfanızın içinde kayar. Başka yerlerde yok sayılır. |
+| `openCommit(sha)` | geçerli projenin o commit'inde Diff görünümünü açar. `sha` 7 ile 64 onaltılık karakterdir; commit'i OhPiChamber kendisi okur. |
+| `setHeight(px)` | Work Status bölümünüzün yüksekliğini ayarlar. OhPiChamber bunu 24 ile 320 piksel arasında tutar; daha uzun içerik sayfanızın içinde kayar. Başka yerlerde yok sayılır. |
 | `onFileOpen(listener)` | dosya düzenleyiciler: düzenlenecek dosyayı alır, `{ path, name, readOnly }` ile birlikte `encoding: "text"` ve `content` ya da `encoding: "binary"` ve `bytes`. Ayrıca sayfanızda Cmd/Ctrl+S ile kaydetmeyi sağlar. |
-| `onFileSnapshot(handler)` | dosya düzenleyiciler: düzenlenmiş dosyanın tamamını `{ content, version }` (ikili bir düzenleyicide `{ bytes, version }`) olarak döndürür. OpenChamber bunu kaydetmek için ve kaynak görünümüne ya da tam ekrana geçmeden önce çağırır. |
+| `onFileSnapshot(handler)` | dosya düzenleyiciler: düzenlenmiş dosyanın tamamını `{ content, version }` (ikili bir düzenleyicide `{ bytes, version }`) olarak döndürür. OhPiChamber bunu kaydetmek için ve kaynak görünümüne ya da tam ekrana geçmeden önce çağırır. |
 | `onFileSaved(listener)` | dosya düzenleyiciler: bu `version` değerine sahip anlık görüntü diske yazıldı. `reportFileChange` ile yanıt verin. |
-| `reportFileChange({ dirty, edited })` | dosya düzenleyiciler: OpenChamber'a kaydedilmemiş değişiklik olup olmadığını ve belgenin az önce değişip değişmediğini bildirir |
+| `reportFileChange({ dirty, edited })` | dosya düzenleyiciler: OhPiChamber'a kaydedilmemiş değişiklik olup olmadığını ve belgenin az önce değişip değişmediğini bildirir |
 | `requestFileSave()` | dosya düzenleyiciler: Cmd/Ctrl+S gibi hemen kaydeder |
 | `reportFileUnsupported()` | dosya düzenleyiciler: bu dosya burada açılamaz, onun yerine kaynağını gösterir |
 
@@ -108,7 +108,7 @@ await host.startSession({
 });
 ```
 
-`providerId` panel id'nizdir; OpenChamber bunun üzerine zaten sizin id'nizi yazar. `id` öğe için kendi tanımlayıcınızdır. `kind` değeri `issue` (varsayılan) veya `pull`. `text` model için isteğe bağlı bağlamdır; boşluklar kırpıldıktan sonra 1 ile 16000 karakter arası. `data` size ait isteğe bağlı bir JSON'dur (durum, yorumlar, ne isterseniz); serileştirildiğinde en fazla 16000 karakter. OpenChamber bunu etiketle birlikte saklar ve kullanıcı etikete tıkladığında `ctx.item` içinde değiştirmeden geri verir; modele hiçbir zaman ulaşmaz.
+`providerId` panel id'nizdir; OhPiChamber bunun üzerine zaten sizin id'nizi yazar. `id` öğe için kendi tanımlayıcınızdır. `kind` değeri `issue` (varsayılan) veya `pull`. `text` model için isteğe bağlı bağlamdır; boşluklar kırpıldıktan sonra 1 ile 16000 karakter arası. `data` size ait isteğe bağlı bir JSON'dur (durum, yorumlar, ne isterseniz); serileştirildiğinde en fazla 16000 karakter. OhPiChamber bunu etiketle birlikte saklar ve kullanıcı etikete tıkladığında `ctx.item` içinde değiştirmeden geri verir; modele hiçbir zaman ulaşmaz.
 
 `startSession`, etkin projeyi değiştirmeden `projectId` kabul eder. `worktree` verilmezse hedef dizin kullanılır; `true` otomatik adlı yeni worktree, `{ kind: "existing", directory }` mevcut worktree, `{ kind: "new", name?, baseBranch? }` ise adı ve temel dalı seçilen yeni worktree içindir. Ad, dal için de kullanılır. `navigation` varsayılanı `"preserve"` olur; `"open"` yeni sohbeti açar. İlk mesajın modeli, ajanı ve varyantı başlangıçta yakalanır.
 
@@ -168,9 +168,9 @@ Ek izin gerekmez. Depolama, bağlı sunucuda bu uzantıya aittir, yeniden yükle
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path` `/` ile başlar, şema ve host içermez; OpenChamber onu manifestinizdeki `apiOrigin` ile birleştirir ve `Authorization` başlığını ekler. Token entegrasyonları yapıştırılan token'ı olduğu gibi, manifest `token.scheme: "bearer"` ayarlıyorsa `Bearer <token>` olarak, `"basic"` ayarlıyorsa `Basic base64(username:token)` olarak gönderir. OAuth ve Linear entegrasyonları her zaman `Bearer` gönderir. Sonuç `{ status, body }` olur. body metindir; JSON'ı kendiniz ayrıştırın.
+`path` `/` ile başlar, şema ve host içermez; OhPiChamber onu manifestinizdeki `apiOrigin` ile birleştirir ve `Authorization` başlığını ekler. Token entegrasyonları yapıştırılan token'ı olduğu gibi, manifest `token.scheme: "bearer"` ayarlıyorsa `Bearer <token>` olarak, `"basic"` ayarlıyorsa `Basic base64(username:token)` olarak gönderir. OAuth ve Linear entegrasyonları her zaman `Bearer` gönderir. Sonuç `{ status, body }` olur. body metindir; JSON'ı kendiniz ayrıştırın.
 
-Bir Linear entegrasyonu ayrıca `GET /api/linear/issues/get` çağırabilir; OpenChamber bunu kendi Linear rotasından yanıtlar.
+Bir Linear entegrasyonu ayrıca `GET /api/linear/issues/get` çağırabilir; OhPiChamber bunu kendi Linear rotasından yanıtlar.
 
 20 saniye içinde yanıt gelmezse `HOST_TIMEOUT`.
 
@@ -186,7 +186,7 @@ try {
 
 ## serviceRequest
 
-Manifest `contributes.service` tanımladığında OpenChamber o süreci başlatır ve sayfanız onunla aynı türden bir çağrıyla konuşur. Sayfa soketi asla kendisi açmaz.
+Manifest `contributes.service` tanımladığında OhPiChamber o süreci başlatır ve sayfanız onunla aynı türden bir çağrıyla konuşur. Sayfa soketi asla kendisi açmaz.
 
 ```ts
 const status = await host.serviceStatus();
@@ -197,7 +197,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 ## Oturum olayları
 
-Sayfanız bir oturumu yalnızca açıkken bilir. Servisiniz daha fazlasını bilebilir: `contributes.service` yanına `contributes.sessionEvents` tanımlayın, OpenChamber listelediğiniz olayları her projeden, bir pencere açık olsun ya da olmasın servise gönderir.
+Sayfanız bir oturumu yalnızca açıkken bilir. Servisiniz daha fazlasını bilebilir: `contributes.service` yanına `contributes.sessionEvents` tanımlayın, OhPiChamber listelediğiniz olayları her projeden, bir pencere açık olsun ya da olmasın servise gönderir.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host" },
@@ -223,11 +223,11 @@ if (url.pathname === SESSION_EVENTS_PATH) {
 }
 ```
 
-Her projenin olayları gönderilir; `event.project.directory` değerini kendi ayarlarınızla karşılaştırın ve geri kalanına `{ "ok": true }` yanıtlayın. Teslimat en fazla bir kez ve sıralıdır, aynı anda tek istek; başarısız bir yanıt olaylarınızı 30 saniye düşürür ve OpenChamber ya da servisiniz kapalıyken olanlar sonradan yeniden gönderilmez. Servisin bunun için panele ihtiyacı yoktur. `session-events-log` örneği her olayı bir dosyaya yazar.
+Her projenin olayları gönderilir; `event.project.directory` değerini kendi ayarlarınızla karşılaştırın ve geri kalanına `{ "ok": true }` yanıtlayın. Teslimat en fazla bir kez ve sıralıdır, aynı anda tek istek; başarısız bir yanıt olaylarınızı 30 saniye düşürür ve OhPiChamber ya da servisiniz kapalıyken olanlar sonradan yeniden gönderilmez. Servisin bunun için panele ihtiyacı yoktur. `session-events-log` örneği her olayı bir dosyaya yazar.
 
-## OpenChamber'ı servisinizden çağırma
+## OhPiChamber'ı servisinizden çağırma
 
-Bir servis, hiçbir pencere açık değilken de işlem yapabilir. `createServiceHost`, servisin OpenChamber'a dönüş yoludur:
+Bir servis, hiçbir pencere açık değilken de işlem yapabilir. `createServiceHost`, servisin OhPiChamber'a dönüş yoludur:
 
 ```ts
 import { createServiceHost } from 'ohpichamber-sdk';
@@ -250,7 +250,7 @@ Ajanın isteklerini başka bir yere, örneğin bir sohbet uygulamasına taşıma
 
 ## Kimse istemeden çalışma
 
-Bir servis ilk istekle başlar ve bir role sahip servis boşta kalınca durur. `service.keepRunning: true`, servisi OpenChamber ile birlikte başlatır ve durduğunda geri getirir. `service.schedule` servisi zamanlamaya göre uyandırır:
+Bir servis ilk istekle başlar ve bir role sahip servis boşta kalınca durur. `service.keepRunning: true`, servisi OhPiChamber ile birlikte başlatır ve durduğunda geri getirir. `service.schedule` servisi zamanlamaya göre uyandırır:
 
 ```json
 "service": {
@@ -261,7 +261,7 @@ Bir servis ilk istekle başlar ve bir role sahip servis boşta kalınca durur. `
 }
 ```
 
-Bir çalıştırma tek bir `POST /schedule` isteğidir. `readServiceScheduleRequest` ile okuyun ve 200 yanıtlayın. OpenChamber kapalıyken kaçırılan bir çalıştırma kaybolur. Dış olaylara ihtiyaç duyan bir servis kendi bağlantısını tutar ya da yoklama yapar.
+Bir çalıştırma tek bir `POST /schedule` isteğidir. `readServiceScheduleRequest` ile okuyun ve 200 yanıtlayın. OhPiChamber kapalıyken kaçırılan bir çalıştırma kaybolur. Dış olaylara ihtiyaç duyan bir servis kendi bağlantısını tutar ya da yoklama yapar.
 
 ## @ menüsündeki satırlar
 
@@ -290,7 +290,7 @@ host.onBlock(({ args, answered }) => draw(args.key, answered));
 button.onclick = () => host.answerBlock('Close this ticket');
 ```
 
-Bunu yapan bir bileşende `"answers": true` ayarlayın. Açıklaması uyduğunda ajanlara yerleşik seçim yerine onunla sormaları söylenir ve yanıt bekleyen bir sayfa kendi Gönder düğmesini göstermez. Böyle bir bloğun altında OpenChamber, kendi formlarındaki not alanının aynısını sunar: ajan notu yanıtınızla birlikte okur ve tek başına bir not da yanıt sayılır.
+Bunu yapan bir bileşende `"answers": true` ayarlayın. Açıklaması uyduğunda ajanlara yerleşik seçim yerine onunla sormaları söylenir ve yanıt bekleyen bir sayfa kendi Gönder düğmesini göstermez. Böyle bir bloğun altında OhPiChamber, kendi formlarındaki not alanının aynısını sunar: ajan notu yanıtınızla birlikte okur ve tek başına bir not da yanıt sayılır.
 
 Argümanları bir model yazar, bu yüzden bir web sayfasındaki ya da bir bilet metnindeki yazı onları yönlendirebilir. Argümanları güvenilmez sayın ve kullanıcı tıklayana kadar yan etkisi olan hiçbir şey yapmayın.
 
@@ -307,9 +307,9 @@ Bir servis, kullanıcının bildirimlerini masaüstü ve telefonun yanında ilet
 }
 ```
 
-OpenChamber bu tarife göre Ayarlar → Entegrasyonlar'da kanal için bir hesap kartı çizer ve hesabı saklar: kullanıcı hesabı orada bağlar, token OpenChamber'da kalır ve servisiniz onu hiç görmez. Bir hesap bağlandıktan sonra OpenChamber'ın telefona göndereceği her bildirim, kullanıcının kendi bildirim anahtarlarından geçtikten sonra servisinize de gider; kullanıcı her zaman bildirilmeyi seçmediyse yalnızca hiçbir pencere görünür değilken. Eklentiyi duraklatmak bunu durdurur.
+OhPiChamber bu tarife göre Ayarlar → Entegrasyonlar'da kanal için bir hesap kartı çizer ve hesabı saklar: kullanıcı hesabı orada bağlar, token OhPiChamber'da kalır ve servisiniz onu hiç görmez. Bir hesap bağlandıktan sonra OhPiChamber'ın telefona göndereceği her bildirim, kullanıcının kendi bildirim anahtarlarından geçtikten sonra servisinize de gider; kullanıcı her zaman bildirilmeyi seçmediyse yalnızca hiçbir pencere görünür değilken. Eklentiyi duraklatmak bunu durdurur.
 
-OpenChamber üç çağrıyı `POST /notifications` adresine iletir: `auth.probe` (bu sunucu ilettiğiniz bir sunucu mu), `auth.verify` (bu token kime ait) ve `notify` (bir bildirim). Her birini `readNotificationsProviderRequest` ile okuyun ve kanalın sunucusuna yalnızca giden yardımcı üzerinden ulaşın; yardımcı isteğinizi çağrının tanıtıcısıyla OpenChamber'a gönderir, OpenChamber token'ı ekler ve isteği hesabın sunucusuyla sınırlı tutar.
+OhPiChamber üç çağrıyı `POST /notifications` adresine iletir: `auth.probe` (bu sunucu ilettiğiniz bir sunucu mu), `auth.verify` (bu token kime ait) ve `notify` (bir bildirim). Her birini `readNotificationsProviderRequest` ile okuyun ve kanalın sunucusuna yalnızca giden yardımcı üzerinden ulaşın; yardımcı isteğinizi çağrının tanıtıcısıyla OhPiChamber'a gönderir, OhPiChamber token'ı ekler ve isteği hesabın sunucusuyla sınırlı tutar.
 
 ```ts
 import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
@@ -337,7 +337,7 @@ Bir projenin hangi odaya ya da kanala gideceği eklentinizin kendi seçimidir: b
 
 ## İzleyiciler
 
-Bir servis, Linear'ın yanında bir iş öğesi izleyicisi olabilir: `provides: ["tracker"]` tanımlayın ve izleyiciyi `contributes.tracker` içinde tarif edin. OpenChamber bunu, servis daha hiç çalışmadan yalnızca manifestten yola çıkarak izleyicilerin göründüğü her yerde Linear'ın yanında listeler.
+Bir servis, Linear'ın yanında bir iş öğesi izleyicisi olabilir: `provides: ["tracker"]` tanımlayın ve izleyiciyi `contributes.tracker` içinde tarif edin. OhPiChamber bunu, servis daha hiç çalışmadan yalnızca manifestten yola çıkarak izleyicilerin göründüğü her yerde Linear'ın yanında listeler.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["tracker"] },
@@ -353,9 +353,9 @@ Bir servis, Linear'ın yanında bir iş öğesi izleyicisi olabilir: `provides: 
 }
 ```
 
-Kullanıcı, Uzantı hesapları altındaki izleyici kartında hesap bağlar: bir token ya da `auth.oauth` tanımladığınızda tarayıcıda oturum açma (OpenChamber oturum açmayı kullanıcının girdiği client id ile yürütür ve token'ları saklar). Servisiniz hiçbir zaman bir kimlik bilgisi görmez. `urls.item`, bir öğenin adresi için şablonlardır; `{id}` tanımlayıcının yerini tutar (sorguda taşındığında `?name={id}` olarak da). OpenChamber bunları derler, böylece yapıştırılan bağlantılar bağlı öğelere dönüşür. `identifier` anahtarın neye benzediğini söyler: `key-number` (`PROJ-42`), `number` ya da `short-code`.
+Kullanıcı, Uzantı hesapları altındaki izleyici kartında hesap bağlar: bir token ya da `auth.oauth` tanımladığınızda tarayıcıda oturum açma (OhPiChamber oturum açmayı kullanıcının girdiği client id ile yürütür ve token'ları saklar). Servisiniz hiçbir zaman bir kimlik bilgisi görmez. `urls.item`, bir öğenin adresi için şablonlardır; `{id}` tanımlayıcının yerini tutar (sorguda taşındığında `?name={id}` olarak da). OhPiChamber bunları derler, böylece yapıştırılan bağlantılar bağlı öğelere dönüşür. `identifier` anahtarın neye benzediğini söyler: `key-number` (`PROJ-42`), `number` ya da `short-code`.
 
-OpenChamber dokuz çağrıyı `POST /tracker` adresine iletir: `auth.probe` ve `auth.verify`, okuma çağrıları `items.list`, `items.get`, `items.liveSummaries`, `states.list` ve `containers.list`, yazma çağrıları `items.updateState` ve `comments.create`. Her birini `readTrackerProviderRequest` ile okuyun, yansız öğe biçimlerinde yanıtlayın ve izleyicinin sunucusuna yalnızca giden yardımcı üzerinden ulaşın; yardımcı isteğinizi çağrının tanıtıcısıyla OpenChamber'a gönderir, OpenChamber kimlik bilgisini ekler ve isteği hesabın sunucusuyla sınırlı tutar. Bir okumanın tanıtıcısı yalnızca `GET` gönderir.
+OhPiChamber dokuz çağrıyı `POST /tracker` adresine iletir: `auth.probe` ve `auth.verify`, okuma çağrıları `items.list`, `items.get`, `items.liveSummaries`, `states.list` ve `containers.list`, yazma çağrıları `items.updateState` ve `comments.create`. Her birini `readTrackerProviderRequest` ile okuyun, yansız öğe biçimlerinde yanıtlayın ve izleyicinin sunucusuna yalnızca giden yardımcı üzerinden ulaşın; yardımcı isteğinizi çağrının tanıtıcısıyla OhPiChamber'a gönderir, OhPiChamber kimlik bilgisini ekler ve isteği hesabın sunucusuyla sınırlı tutar. Bir okumanın tanıtıcısı yalnızca `GET` gönderir.
 
 ```ts
 import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
@@ -375,20 +375,20 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 }
 ```
 
-Kullanıcı oturum yorumlarını açtığında OpenChamber, `comments.create` çağrısını "session started", "completed" ya da "failed" ile ve oturuma bir bağlantıyla, her biri için bir kez yapar; yorum başka bir şey taşımaz. `tracker-provider` örneği, karşısında deneyebileceğiniz sahte bir sunucuyla birlikte eksiksiz bir izleyicidir.
+Kullanıcı oturum yorumlarını açtığında OhPiChamber, `comments.create` çağrısını "session started", "completed" ya da "failed" ile ve oturuma bir bağlantıyla, her biri için bir kez yapar; yorum başka bir şey taşımaz. `tracker-provider` örneği, karşısında deneyebileceğiniz sahte bir sunucuyla birlikte eksiksiz bir izleyicidir.
 
 ## Kullanım sağlayıcıları
 
-Bir servis, yerleşik sağlayıcıların yanında kullanımı bildirebilir: `provides: ["quota"]` tanımlayın ve kimlik bilgilerine ihtiyaç duyduğu OpenCode sağlayıcılarını `contributes.quota.providers` içinde listeleyin. OpenChamber sağlayıcıya `ext-<panel.id>` adını verir, kartını uzantının adı ve simgesiyle çizer ve yerleşik bir sağlayıcıya sorduğu gibi sorar.
+Bir servis, yerleşik sağlayıcıların yanında kullanımı bildirebilir: `provides: ["quota"]` tanımlayın ve kimlik bilgilerine ihtiyaç duyduğu OpenCode sağlayıcılarını `contributes.quota.providers` içinde listeleyin. OhPiChamber sağlayıcıya `ext-<panel.id>` adını verir, kartını uzantının adı ve simgesiyle çizer ve yerleşik bir sağlayıcıya sorduğu gibi sorar.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir sürüm yeniden sorar. Her yenilemede OpenChamber `POST /quota` adresine tek bir çağrı, `usage.read`, gönderir; `input.credentials` içinde, listelenen sağlayıcılardan OpenCode'un kimlik bilgisi sakladığı her biri için o kimlik bilgisi (bir API anahtarı ya da bir tarayıcı girişinin token'ları) bulunur ve depodan başka hiçbir şey bulunmaz. OpenCode'un kimlik bilgisi saklamadığı listelenmiş bir sağlayıcı yapılandırılmamış olarak gösterilir ve servis çağrılmaz; anahtarı uzantının kendi ayarlarında duran bir sağlayıcı için boş listeye izin verilir.
+Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir sürüm yeniden sorar. Her yenilemede OhPiChamber `POST /quota` adresine tek bir çağrı, `usage.read`, gönderir; `input.credentials` içinde, listelenen sağlayıcılardan OpenCode'un kimlik bilgisi sakladığı her biri için o kimlik bilgisi (bir API anahtarı ya da bir tarayıcı girişinin token'ları) bulunur ve depodan başka hiçbir şey bulunmaz. OpenCode'un kimlik bilgisi saklamadığı listelenmiş bir sağlayıcı yapılandırılmamış olarak gösterilir ve servis çağrılmaz; anahtarı uzantının kendi ayarlarında duran bir sağlayıcı için boş listeye izin verilir.
 
-Gövdeyi `readQuotaProviderRequest` ile okuyun ve yerleşik bir sağlayıcının hesapladığı sonucu `{ ok: true, data }` ile yanıtlayın: `ok`, `configured`, `error`, `planLabel` ve pencere adına göre `usage.windows`, her biri `usedPercent`, `windowSeconds`, `resetAt` (epoch milisaniye) ve isteğe bağlı `valueLabel` ya da `value` ile; ayrıca model başına pencereler için `usage.models`. Kalan payı, sıfırlamaya geri sayımı ve biçimlendirilmiş metinleri OpenChamber türetir, böylece kart yerleşik bir sağlayıcınınkiyle eşleşir.
+Gövdeyi `readQuotaProviderRequest` ile okuyun ve yerleşik bir sağlayıcının hesapladığı sonucu `{ ok: true, data }` ile yanıtlayın: `ok`, `configured`, `error`, `planLabel` ve pencere adına göre `usage.windows`, her biri `usedPercent`, `windowSeconds`, `resetAt` (epoch milisaniye) ve isteğe bağlı `valueLabel` ya da `value` ile; ayrıca model başına pencereler için `usage.models`. Kalan payı, sıfırlamaya geri sayımı ve biçimlendirilmiş metinleri OhPiChamber türetir, böylece kart yerleşik bir sağlayıcınınkiyle eşleşir.
 
 ```ts
 import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
@@ -434,9 +434,9 @@ Başarısız çağrılar `HostRequestError` fırlatır. `code` şunlardan biridi
 
 | Kod | Ne zaman |
 | --- | --- |
-| `HOST_UNAVAILABLE` | window yok, OpenChamber içinde değil veya `dispose()` çalıştı |
+| `HOST_UNAVAILABLE` | window yok, OhPiChamber içinde değil veya `dispose()` çalıştı |
 | `HOST_TIMEOUT` | 20 saniye boyunca yanıt yok |
-| `HOST_REJECTED` | OpenChamber reddetti veya bu SDK'nın tanımadığı bir kodla yanıtladı |
+| `HOST_REJECTED` | OhPiChamber reddetti veya bu SDK'nın tanımadığı bir kodla yanıtladı |
 | `DISCONNECTED` | entegrasyonunuz için token veya Linear bağlantısı yok |
 | `BAD_PATH` | `path` hatalı biçimlendirilmiş ya da izin verilen kaynağın dışına çıkmaya çalıştı |
 | `NO_INTEGRATION` | manifestte `integration` yok |
@@ -452,7 +452,7 @@ Başarısız çağrılar `HostRequestError` fırlatır. `code` şunlardan biridi
 | `DENIED` | işletim sistemi dosya işlemini reddetti |
 | `NO_MODEL` | kullanılabilir Small Model olmadan `generate` |
 | `MODEL_FAILED` | Small Model bir hata döndürdü |
-| `UNSUPPORTED` | bu OpenChamber çağrıyı yapamaz, örneğin Diff görünümü olmayan yerde `openCommit` |
+| `UNSUPPORTED` | bu OhPiChamber çağrıyı yapamaz, örneğin Diff görünümü olmayan yerde `openCommit` |
 
 ## İlgili sayfalar
 

@@ -15,6 +15,7 @@ import { runtimeFetch } from '@/lib/runtime-fetch';
 import { problemMessage } from '@/lib/problemMessage';
 
 const VERSION_SLOT = '\u0000';
+const UPSTREAM_GITHUB_URL = 'https://github.com/openchamber/openchamber';
 
 interface AboutDialogProps {
   open: boolean;
@@ -144,7 +145,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           <AboutLogo />
 
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">OpenChamber</h2>
+            <h2 className="text-lg font-semibold">OhPiChamber</h2>
             <div className="space-y-0.5 typography-meta text-muted-foreground">
               {renderVersionRow('aboutDialog.openChamberVersionLabel', version)}
             </div>
@@ -187,9 +188,25 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             </div>
           </div>
 
-          <p className="typography-meta text-muted-foreground pt-2">
-            {t('aboutDialog.footerNote')}
-          </p>
+          <div className="space-y-2 pt-2 text-center">
+            <p className="typography-meta text-muted-foreground">
+              {t('aboutDialog.footerNote')}
+            </p>
+            <div className="space-y-0.5 typography-meta text-muted-foreground">
+              <p>
+                <a
+                  href={UPSTREAM_GITHUB_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+                >
+                  <span>{t('settings.openchamber.about.credit')}</span>
+                  <Icon name="external-link" className="size-3.5" />
+                </a>
+              </p>
+              <p>{t('settings.openchamber.about.creditLicense')}</p>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

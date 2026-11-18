@@ -1,6 +1,6 @@
 # Model bench
 
-Measures how a model handles real OpenChamber work, so the team can decide which model gets which kind of task. Each task replays a commit that already shipped: the model gets the code as it was before the commit and a prompt that describes the symptom, and its result is compared with the fix that shipped.
+Measures how a model handles real OhPiChamber work, so the team can decide which model gets which kind of task. Each task replays a commit that already shipped: the model gets the code as it was before the commit and a prompt that describes the symptom, and its result is compared with the fix that shipped.
 
 ## Measuring a new model
 
@@ -19,7 +19,7 @@ Options: `--timeout <minutes>` per run (default 30), `--keep` keeps each run's c
 ## What a run is
 
 - A fresh copy of the repository at the commit's parent, made with `git archive`, so it has no history the model could read the fix from, and its dependencies installed from that commit's lockfile.
-- `omp run` with the `build` agent in that copy, under a private agent config: no OpenChamber plugins, no personal `AGENTS.md`, no web tools, file tools denied outside the copy.
+- `omp run` with the `build` agent in that copy, under a private agent config: no OhPiChamber plugins, no personal `AGENTS.md`, no web tools, file tools denied outside the copy.
 - A watchdog stops a run at the time limit or after 6 minutes without any event, and kills every process it started. A tool call that names the real checkout stops the whole bench; one that reaches this repository on GitHub stops the run and marks it `leaked`.
 - After the run: the commit's own tests are dropped in and run, and the copy and its agent session are deleted.
 

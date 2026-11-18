@@ -33,7 +33,7 @@ const DIR_ENV = 'OPENCHAMBER_SIGNPATH_DIR';
 // electron-builder writes the uninstaller next to the installer under this suffix.
 const BUILDER_UNINSTALLER_SUFFIX = '__uninstaller.exe';
 
-const APP_EXE = 'OpenChamber.exe';
+const APP_EXE = 'OhPiChamber.exe';
 const UNINSTALLER_EXE = 'uninstaller.exe';
 
 const unpackedDirName = (arch) => (arch === 'x64' ? 'win-unpacked' : `win-${arch}-unpacked`);

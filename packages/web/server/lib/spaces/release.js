@@ -11,7 +11,7 @@ import { SpaceError } from './errors.js';
 
 export const ISOLATED_SPACES_RELEASED = false;
 
-const ISOLATED_SPACES_UNRELEASED_MESSAGE = 'Isolated spaces are not released yet: a space has no agent runtime until the OMP space runtime is built. OpenChamber creates, starts and repairs none, and gives a space no model or login grant.';
+const ISOLATED_SPACES_UNRELEASED_MESSAGE = 'Isolated spaces are not released yet: a space has no agent runtime until the OMP space runtime is built. OhPiChamber creates, starts and repairs none, and gives a space no model or login grant.';
 
 /** Whether spaces may be made and run. The one answer every entry point asks. */
 export const isSpacesReleased = () => ISOLATED_SPACES_RELEASED;

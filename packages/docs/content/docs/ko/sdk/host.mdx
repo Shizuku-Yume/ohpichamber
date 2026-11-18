@@ -1,6 +1,6 @@
 ---
 title: Host API
-description: 확장이 호출할 수 있는 모든 connectHost 메서드, OpenChamber가 보내주는 것, 제한, 오류 코드.
+description: 확장이 호출할 수 있는 모든 connectHost 메서드, OhPiChamber가 보내주는 것, 제한, 오류 코드.
 ---
 
 # Host API
@@ -13,11 +13,11 @@ import { connectHost, HostRequestError } from "ohpichamber-sdk";
 const host = connectHost();
 ```
 
-`connectHost`는 `window`가 없으면 `HOST_UNAVAILABLE`을 throw합니다. OpenChamber 밖에서는 모든 호출이 `HOST_UNAVAILABLE`로 reject되는 클라이언트를 반환합니다. 페이지를 정리할 때는 `dispose()`를 호출하세요. 진행 중인 호출은 같은 코드로 reject됩니다.
+`connectHost`는 `window`가 없으면 `HOST_UNAVAILABLE`을 throw합니다. OhPiChamber 밖에서는 모든 호출이 `HOST_UNAVAILABLE`로 reject되는 클라이언트를 반환합니다. 페이지를 정리할 때는 `dispose()`를 호출하세요. 진행 중인 호출은 같은 코드로 reject됩니다.
 
-## OpenChamber가 보내주는 것
+## OhPiChamber가 보내주는 것
 
-`onReady`는 첫 스냅샷과 함께 실행되고, OpenChamber가 스냅샷을 새로 고칠 때마다 다시 실행됩니다.
+`onReady`는 첫 스냅샷과 함께 실행되고, OhPiChamber가 스냅샷을 새로 고칠 때마다 다시 실행됩니다.
 
 한 번만 실행되는 마운트 콜백이 아닙니다. UI 마운트와 구독 등록은 한 번만 하고, 이후에는 입력과 초안을 교체하지 않고 테마와 컨텍스트를 갱신하세요. [UI kit](/sdk/ui/)의 가드 예제를 참고하세요. `onConnection` 같은 리스너는 현재 값을 즉시 전달하며 새 스냅샷에서 같은 값을 다시 전달할 수 있습니다. 새 요청 전에 필요한 필드를 비교하고, 이전 요청의 오래된 응답은 무시하세요.
 
@@ -65,12 +65,12 @@ const host = connectHost();
 | `generate({ prompt, system?, maxOutputTokens? })` | 사용자의 Small Model에서 일회성 텍스트를 받습니다. `{ text }`를 반환합니다. `model` 권한이 필요합니다. |
 | `onResolve(handler)` | 슬래시 명령의 핸들러를 등록합니다. `{ command, args }`를 받고 첨부할 항목 또는 `null`을 반환합니다. |
 | `setBadge(count)` | 레일 아이콘에 점을 표시하고 숫자(0부터 999까지)를 툴팁에 보여 주며, `null`이면 지웁니다 |
-| `openCommit(sha)` | 현재 프로젝트의 해당 커밋으로 Diff 뷰를 엽니다. `sha`는 16진수 7~64자이며, 커밋은 OpenChamber가 직접 읽습니다. |
-| `setHeight(px)` | Work Status 섹션의 높이를 정합니다. OpenChamber는 24~320픽셀 사이로 유지하고, 더 긴 콘텐츠는 페이지 안에서 스크롤됩니다. 다른 곳에서는 무시됩니다. |
+| `openCommit(sha)` | 현재 프로젝트의 해당 커밋으로 Diff 뷰를 엽니다. `sha`는 16진수 7~64자이며, 커밋은 OhPiChamber가 직접 읽습니다. |
+| `setHeight(px)` | Work Status 섹션의 높이를 정합니다. OhPiChamber는 24~320픽셀 사이로 유지하고, 더 긴 콘텐츠는 페이지 안에서 스크롤됩니다. 다른 곳에서는 무시됩니다. |
 | `onFileOpen(listener)` | 파일 편집기: 편집할 파일을 받습니다. `{ path, name, readOnly }`에 더해 `encoding: "text"`이면 `content`, `encoding: "binary"`이면 `bytes`가 들어 있습니다. 페이지 안에서 Cmd/Ctrl+S로도 저장되게 합니다. |
-| `onFileSnapshot(handler)` | 파일 편집기: 편집된 파일 전체를 `{ content, version }`(바이너리 편집기는 `{ bytes, version }`)으로 반환합니다. OpenChamber는 저장할 때와 소스 보기나 전체 화면으로 전환하기 전에 호출합니다. |
+| `onFileSnapshot(handler)` | 파일 편집기: 편집된 파일 전체를 `{ content, version }`(바이너리 편집기는 `{ bytes, version }`)으로 반환합니다. OhPiChamber는 저장할 때와 소스 보기나 전체 화면으로 전환하기 전에 호출합니다. |
 | `onFileSaved(listener)` | 파일 편집기: 해당 `version`의 스냅샷이 디스크에 저장되었습니다. `reportFileChange`로 응답하세요. |
-| `reportFileChange({ dirty, edited })` | 파일 편집기: 저장하지 않은 변경이 있는지, 문서가 방금 바뀌었는지 OpenChamber에 알립니다 |
+| `reportFileChange({ dirty, edited })` | 파일 편집기: 저장하지 않은 변경이 있는지, 문서가 방금 바뀌었는지 OhPiChamber에 알립니다 |
 | `requestFileSave()` | 파일 편집기: Cmd/Ctrl+S처럼 지금 저장합니다 |
 | `reportFileUnsupported()` | 파일 편집기: 이 파일은 여기서 열 수 없으니 대신 소스를 보여 줍니다 |
 
@@ -108,7 +108,7 @@ await host.startSession({
 });
 ```
 
-`providerId`는 패널 id입니다. 어차피 OpenChamber가 여러분의 id로 덮어씁니다. `id`는 항목에 대한 여러분 자신의 식별자입니다. `kind`는 `issue`(기본값) 또는 `pull`입니다. `text`는 모델에 주는 선택적 컨텍스트로, 트림 후 1자에서 16000자입니다. `data`는 여러분 마음대로 쓰는 선택적 JSON으로(상태, 댓글, 무엇이든), 직렬화했을 때 16000자까지입니다. OpenChamber는 이를 칩과 함께 저장하고, 사용자가 칩을 클릭하면 `ctx.item`으로 그대로 돌려줍니다. 모델에는 절대 전달되지 않습니다.
+`providerId`는 패널 id입니다. 어차피 OhPiChamber가 여러분의 id로 덮어씁니다. `id`는 항목에 대한 여러분 자신의 식별자입니다. `kind`는 `issue`(기본값) 또는 `pull`입니다. `text`는 모델에 주는 선택적 컨텍스트로, 트림 후 1자에서 16000자입니다. `data`는 여러분 마음대로 쓰는 선택적 JSON으로(상태, 댓글, 무엇이든), 직렬화했을 때 16000자까지입니다. OhPiChamber는 이를 칩과 함께 저장하고, 사용자가 칩을 클릭하면 `ctx.item`으로 그대로 돌려줍니다. 모델에는 절대 전달되지 않습니다.
 
 `startSession`은 `projectId`로 현재 화면을 전환하지 않고 대상 프로젝트를 지정합니다. `worktree` 생략은 대상 디렉터리, `true`는 자동 이름의 새 worktree, `{ kind: "existing", directory }`는 기존 worktree, `{ kind: "new", name?, baseBranch? }`는 이름과 기준 브랜치를 지정하는 새 worktree입니다. 이름은 브랜치에도 사용됩니다. `navigation` 기본값은 `"preserve"`이며 `"open"`은 새 채팅을 엽니다. 첫 메시지의 모델, 에이전트, 변형은 시작 시 확정됩니다.
 
@@ -159,9 +159,9 @@ host.onSessionLifecycle((event) => {
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path`는 `/`로 시작하고 스킴이나 호스트를 포함하지 않습니다. OpenChamber가 매니페스트의 `apiOrigin`과 결합하고 `Authorization` 헤더를 추가합니다. 토큰 통합은 붙여넣은 토큰을 그대로 보내거나, 매니페스트에 `token.scheme: "bearer"`가 설정되어 있으면 `Bearer <token>`으로, `"basic"`이 설정되어 있으면 `Basic base64(username:token)`으로 보냅니다. OAuth와 Linear 통합은 항상 `Bearer`를 보냅니다. 결과는 `{ status, body }`입니다. body는 텍스트이므로 JSON은 직접 파싱하세요.
+`path`는 `/`로 시작하고 스킴이나 호스트를 포함하지 않습니다. OhPiChamber가 매니페스트의 `apiOrigin`과 결합하고 `Authorization` 헤더를 추가합니다. 토큰 통합은 붙여넣은 토큰을 그대로 보내거나, 매니페스트에 `token.scheme: "bearer"`가 설정되어 있으면 `Bearer <token>`으로, `"basic"`이 설정되어 있으면 `Basic base64(username:token)`으로 보냅니다. OAuth와 Linear 통합은 항상 `Bearer`를 보냅니다. 결과는 `{ status, body }`입니다. body는 텍스트이므로 JSON은 직접 파싱하세요.
 
-Linear 통합은 `GET /api/linear/issues/get`도 호출할 수 있으며, OpenChamber가 자체 Linear 라우트에서 응답합니다.
+Linear 통합은 `GET /api/linear/issues/get`도 호출할 수 있으며, OhPiChamber가 자체 Linear 라우트에서 응답합니다.
 
 20초 안에 응답이 없으면 `HOST_TIMEOUT`입니다.
 
@@ -177,7 +177,7 @@ try {
 
 ## serviceRequest
 
-매니페스트에 `contributes.service`를 선언하면 OpenChamber가 그 프로세스를 시작하고, 페이지는 같은 종류의 호출로 그것과 대화합니다. 페이지가 직접 소켓을 여는 일은 없습니다.
+매니페스트에 `contributes.service`를 선언하면 OhPiChamber가 그 프로세스를 시작하고, 페이지는 같은 종류의 호출로 그것과 대화합니다. 페이지가 직접 소켓을 여는 일은 없습니다.
 
 ```ts
 const status = await host.serviceStatus();
@@ -188,7 +188,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 ## 세션 이벤트
 
-페이지는 세션이 열려 있는 동안에만 세션에 대해 알 수 있습니다. 서비스는 더 많이 알 수 있습니다. `contributes.service` 옆에 `contributes.sessionEvents`를 선언하면 OpenChamber가 나열한 이벤트를 모든 프로젝트에서, 창이 열려 있든 아니든 서비스로 보냅니다.
+페이지는 세션이 열려 있는 동안에만 세션에 대해 알 수 있습니다. 서비스는 더 많이 알 수 있습니다. `contributes.service` 옆에 `contributes.sessionEvents`를 선언하면 OhPiChamber가 나열한 이벤트를 모든 프로젝트에서, 창이 열려 있든 아니든 서비스로 보냅니다.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host" },
@@ -214,11 +214,11 @@ if (url.pathname === SESSION_EVENTS_PATH) {
 }
 ```
 
-모든 프로젝트의 이벤트가 전송됩니다. `event.project.directory`를 자신의 설정과 비교하고 나머지에는 `{ "ok": true }`로 답하세요. 전달은 최대 한 번, 순서대로, 한 번에 요청 하나씩입니다. 응답에 실패하면 30초 동안 이벤트가 버려지고, OpenChamber나 서비스가 꺼져 있던 동안의 이벤트는 다시 보내지 않습니다. 이를 위해 서비스에 패널이 필요하지는 않습니다. `session-events-log` 예제는 모든 이벤트를 파일에 기록합니다.
+모든 프로젝트의 이벤트가 전송됩니다. `event.project.directory`를 자신의 설정과 비교하고 나머지에는 `{ "ok": true }`로 답하세요. 전달은 최대 한 번, 순서대로, 한 번에 요청 하나씩입니다. 응답에 실패하면 30초 동안 이벤트가 버려지고, OhPiChamber나 서비스가 꺼져 있던 동안의 이벤트는 다시 보내지 않습니다. 이를 위해 서비스에 패널이 필요하지는 않습니다. `session-events-log` 예제는 모든 이벤트를 파일에 기록합니다.
 
-## 서비스에서 OpenChamber 호출하기
+## 서비스에서 OhPiChamber 호출하기
 
-서비스는 창이 열려 있지 않아도 동작할 수 있습니다. `createServiceHost`는 서비스가 OpenChamber로 돌아오는 경로입니다.
+서비스는 창이 열려 있지 않아도 동작할 수 있습니다. `createServiceHost`는 서비스가 OhPiChamber로 돌아오는 경로입니다.
 
 ```ts
 import { createServiceHost } from 'ohpichamber-sdk';
@@ -241,7 +241,7 @@ await host.emit('deploy-finished', { id: 42 });
 
 ## 아무도 요청하지 않아도 실행하기
 
-서비스는 첫 요청에서 시작되고, 역할을 맡은 서비스는 유휴 상태가 되면 멈춥니다. `service.keepRunning: true`는 OpenChamber와 함께 서비스를 시작하고 멈추면 다시 띄웁니다. `service.schedule`은 시간에 맞춰 서비스를 깨웁니다.
+서비스는 첫 요청에서 시작되고, 역할을 맡은 서비스는 유휴 상태가 되면 멈춥니다. `service.keepRunning: true`는 OhPiChamber와 함께 서비스를 시작하고 멈추면 다시 띄웁니다. `service.schedule`은 시간에 맞춰 서비스를 깨웁니다.
 
 ```json
 "service": {
@@ -252,7 +252,7 @@ await host.emit('deploy-finished', { id: 42 });
 }
 ```
 
-실행 한 번은 `POST /schedule` 하나입니다. `readServiceScheduleRequest`로 읽고 200으로 답하세요. OpenChamber가 꺼져 있는 동안 놓친 실행은 사라집니다. 외부 이벤트가 필요한 서비스는 자체 연결을 유지하거나 폴링합니다.
+실행 한 번은 `POST /schedule` 하나입니다. `readServiceScheduleRequest`로 읽고 200으로 답하세요. OhPiChamber가 꺼져 있는 동안 놓친 실행은 사라집니다. 외부 이벤트가 필요한 서비스는 자체 연결을 유지하거나 폴링합니다.
 
 ## @ 메뉴의 행
 
@@ -281,7 +281,7 @@ host.onBlock(({ args, answered }) => draw(args.key, answered));
 button.onclick = () => host.answerBlock('Close this ticket');
 ```
 
-이렇게 동작하는 컴포넌트에는 `"answers": true`를 설정하세요. 설명이 맞으면 에이전트는 내장 선택지 대신 이 컴포넌트로 묻도록 안내받고, 답을 기다리는 페이지는 보내기 버튼을 표시하지 않습니다. 이런 블록 아래에는 OpenChamber 자체 양식과 같은 메모 입력란이 표시됩니다. 에이전트는 메모를 답과 함께 읽고, 메모만 있어도 답이 됩니다.
+이렇게 동작하는 컴포넌트에는 `"answers": true`를 설정하세요. 설명이 맞으면 에이전트는 내장 선택지 대신 이 컴포넌트로 묻도록 안내받고, 답을 기다리는 페이지는 보내기 버튼을 표시하지 않습니다. 이런 블록 아래에는 OhPiChamber 자체 양식과 같은 메모 입력란이 표시됩니다. 에이전트는 메모를 답과 함께 읽고, 메모만 있어도 답이 됩니다.
 
 인수는 모델이 쓰므로 웹 페이지나 티켓의 텍스트가 인수를 조종할 수 있습니다. 신뢰할 수 없는 값으로 취급하고, 사용자가 클릭하기 전에는 부수 효과가 있는 작업을 하지 마세요.
 
@@ -298,9 +298,9 @@ button.onclick = () => host.answerBlock('Close this ticket');
 }
 ```
 
-OpenChamber는 그 기술을 바탕으로 설정 → 통합에 채널의 계정 카드를 그리고 계정을 관리합니다. 사용자는 거기서 계정을 연결하고, 토큰은 OpenChamber에 남으며, 서비스는 토큰을 결코 보지 못합니다. 계정이 연결되면 OpenChamber가 휴대폰으로 보내는 모든 알림이 서비스로도 갑니다. 사용자 자신의 알림 설정을 따르고, 사용자가 항상 알림받기를 선택하지 않았다면 창이 보이지 않는 동안에만 갑니다. 확장을 일시 중지하면 멈춥니다.
+OhPiChamber는 그 기술을 바탕으로 설정 → 통합에 채널의 계정 카드를 그리고 계정을 관리합니다. 사용자는 거기서 계정을 연결하고, 토큰은 OhPiChamber에 남으며, 서비스는 토큰을 결코 보지 못합니다. 계정이 연결되면 OhPiChamber가 휴대폰으로 보내는 모든 알림이 서비스로도 갑니다. 사용자 자신의 알림 설정을 따르고, 사용자가 항상 알림받기를 선택하지 않았다면 창이 보이지 않는 동안에만 갑니다. 확장을 일시 중지하면 멈춥니다.
 
-OpenChamber는 세 가지 호출을 `POST /notifications`로 전달합니다. `auth.probe`는 이 서버가 전달 대상인지, `auth.verify`는 이 토큰이 누구의 것인지, `notify`는 알림 하나입니다. 각각을 `readNotificationsProviderRequest`로 읽고, 채널의 서버에는 아웃바운드 헬퍼를 통해서만 접근하세요. 헬퍼는 호출의 핸들을 붙여 요청을 OpenChamber에 보내고, OpenChamber가 토큰을 추가하고 요청을 계정의 서버로만 보냅니다.
+OhPiChamber는 세 가지 호출을 `POST /notifications`로 전달합니다. `auth.probe`는 이 서버가 전달 대상인지, `auth.verify`는 이 토큰이 누구의 것인지, `notify`는 알림 하나입니다. 각각을 `readNotificationsProviderRequest`로 읽고, 채널의 서버에는 아웃바운드 헬퍼를 통해서만 접근하세요. 헬퍼는 호출의 핸들을 붙여 요청을 OhPiChamber에 보내고, OhPiChamber가 토큰을 추가하고 요청을 계정의 서버로만 보냅니다.
 
 ```ts
 import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
@@ -328,7 +328,7 @@ if (url.pathname === NOTIFICATIONS_PROVIDER_PATH) {
 
 ## 트래커
 
-서비스는 Linear 옆에 놓이는 작업 항목 트래커가 될 수 있습니다. `provides: ["tracker"]`를 선언하고 `contributes.tracker`에 트래커를 기술하세요. 그러면 OpenChamber는 서비스가 실행되기도 전에 매니페스트만으로 트래커가 나오는 모든 곳에서 Linear 옆에 그것을 나열합니다.
+서비스는 Linear 옆에 놓이는 작업 항목 트래커가 될 수 있습니다. `provides: ["tracker"]`를 선언하고 `contributes.tracker`에 트래커를 기술하세요. 그러면 OhPiChamber는 서비스가 실행되기도 전에 매니페스트만으로 트래커가 나오는 모든 곳에서 Linear 옆에 그것을 나열합니다.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["tracker"] },
@@ -344,9 +344,9 @@ if (url.pathname === NOTIFICATIONS_PROVIDER_PATH) {
 }
 ```
 
-사용자는 확장 계정 아래 트래커의 카드에서 계정을 연결합니다. 토큰, 또는 `auth.oauth`를 선언했다면 브라우저 로그인입니다(OpenChamber가 사용자가 입력한 client id로 로그인을 진행하고 토큰을 보관합니다). 서비스는 자격 증명을 결코 보지 못합니다. `urls.item`은 항목 주소의 템플릿이며 `{id}`가 식별자를 나타냅니다(쿼리로 전달될 때는 `?name={id}` 형태도 됩니다). OpenChamber가 이를 컴파일하므로 붙여 넣은 링크가 연결된 항목이 됩니다. `identifier`는 키의 모양을 말합니다. `key-number`(`PROJ-42`), `number`, `short-code` 중 하나입니다.
+사용자는 확장 계정 아래 트래커의 카드에서 계정을 연결합니다. 토큰, 또는 `auth.oauth`를 선언했다면 브라우저 로그인입니다(OhPiChamber가 사용자가 입력한 client id로 로그인을 진행하고 토큰을 보관합니다). 서비스는 자격 증명을 결코 보지 못합니다. `urls.item`은 항목 주소의 템플릿이며 `{id}`가 식별자를 나타냅니다(쿼리로 전달될 때는 `?name={id}` 형태도 됩니다). OhPiChamber가 이를 컴파일하므로 붙여 넣은 링크가 연결된 항목이 됩니다. `identifier`는 키의 모양을 말합니다. `key-number`(`PROJ-42`), `number`, `short-code` 중 하나입니다.
 
-OpenChamber는 아홉 가지 호출을 `POST /tracker`로 전달합니다. `auth.probe`와 `auth.verify`, 읽기인 `items.list`, `items.get`, `items.liveSummaries`, `states.list`, `containers.list`, 쓰기인 `items.updateState`와 `comments.create`입니다. 각각을 `readTrackerProviderRequest`로 읽고, 중립적인 항목 형태로 응답하고, 트래커의 서버에는 아웃바운드 헬퍼를 통해서만 접근하세요. 헬퍼는 호출의 핸들을 붙여 요청을 OpenChamber에 보내고, OpenChamber가 자격 증명을 추가하고 요청을 계정의 서버로만 보냅니다. 읽기의 핸들은 `GET`만 보냅니다.
+OhPiChamber는 아홉 가지 호출을 `POST /tracker`로 전달합니다. `auth.probe`와 `auth.verify`, 읽기인 `items.list`, `items.get`, `items.liveSummaries`, `states.list`, `containers.list`, 쓰기인 `items.updateState`와 `comments.create`입니다. 각각을 `readTrackerProviderRequest`로 읽고, 중립적인 항목 형태로 응답하고, 트래커의 서버에는 아웃바운드 헬퍼를 통해서만 접근하세요. 헬퍼는 호출의 핸들을 붙여 요청을 OhPiChamber에 보내고, OhPiChamber가 자격 증명을 추가하고 요청을 계정의 서버로만 보냅니다. 읽기의 핸들은 `GET`만 보냅니다.
 
 ```ts
 import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
@@ -366,20 +366,20 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 }
 ```
 
-사용자가 세션 댓글을 켜면 OpenChamber는 "session started", "completed" 또는 "failed"와 세션 링크를 담아 `comments.create`를 각각 한 번씩 호출합니다. 댓글에는 그 외 아무것도 담기지 않습니다. `tracker-provider` 예제는 완성된 트래커이며, 시험해 볼 가짜 서버도 들어 있습니다.
+사용자가 세션 댓글을 켜면 OhPiChamber는 "session started", "completed" 또는 "failed"와 세션 링크를 담아 `comments.create`를 각각 한 번씩 호출합니다. 댓글에는 그 외 아무것도 담기지 않습니다. `tracker-provider` 예제는 완성된 트래커이며, 시험해 볼 가짜 서버도 들어 있습니다.
 
 ## 사용량 제공자
 
-서비스는 내장 제공자 옆에서 사용량을 보고할 수 있습니다. `provides: ["quota"]`를 선언하고 `contributes.quota.providers`에 자격 증명이 필요한 OpenCode 제공자를 나열하세요. OpenChamber는 그 제공자를 `ext-<panel.id>`로 이름 붙이고, 확장의 이름과 아이콘으로 카드를 그리며, 내장 제공자에게 묻는 것과 같은 방식으로 묻습니다.
+서비스는 내장 제공자 옆에서 사용량을 보고할 수 있습니다. `provides: ["quota"]`를 선언하고 `contributes.quota.providers`에 자격 증명이 필요한 OpenCode 제공자를 나열하세요. OhPiChamber는 그 제공자를 `ext-<panel.id>`로 이름 붙이고, 확장의 이름과 아이콘으로 카드를 그리며, 내장 제공자에게 묻는 것과 같은 방식으로 묻습니다.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-승인 대화 상자에는 그 제공자들이 나열되고, 목록을 바꾼 버전은 다시 묻습니다. 새로 고칠 때마다 OpenChamber는 `POST /quota`에 `usage.read` 호출을 한 번 보내며, `input.credentials`에는 나열된 제공자 중 OpenCode가 자격 증명을 보관하는 것에 대해 그 자격 증명(API 키 또는 브라우저 로그인의 토큰)만 담기고 저장소의 다른 내용은 담기지 않습니다. OpenCode가 자격 증명을 보관하지 않는 나열된 제공자는 미설정으로 표시되고 서비스는 호출되지 않습니다. 빈 목록도 허용되며, 키가 확장 자체 설정에 있는 제공자를 위한 것입니다.
+승인 대화 상자에는 그 제공자들이 나열되고, 목록을 바꾼 버전은 다시 묻습니다. 새로 고칠 때마다 OhPiChamber는 `POST /quota`에 `usage.read` 호출을 한 번 보내며, `input.credentials`에는 나열된 제공자 중 OpenCode가 자격 증명을 보관하는 것에 대해 그 자격 증명(API 키 또는 브라우저 로그인의 토큰)만 담기고 저장소의 다른 내용은 담기지 않습니다. OpenCode가 자격 증명을 보관하지 않는 나열된 제공자는 미설정으로 표시되고 서비스는 호출되지 않습니다. 빈 목록도 허용되며, 키가 확장 자체 설정에 있는 제공자를 위한 것입니다.
 
-본문은 `readQuotaProviderRequest`로 읽고, 내장 제공자가 계산하는 결과를 `{ ok: true, data }`로 답하세요. `ok`, `configured`, `error`, `planLabel`, 그리고 창 이름을 키로 하는 `usage.windows`(각각 `usedPercent`, `windowSeconds`, `resetAt`(에포크 밀리초), 선택적인 `valueLabel` 또는 `value`), 모델별 창을 위한 `usage.models`입니다. 남은 비율, 초기화까지의 카운트다운, 서식이 적용된 문자열은 OpenChamber가 도출하므로 카드는 내장 제공자의 것과 일치합니다.
+본문은 `readQuotaProviderRequest`로 읽고, 내장 제공자가 계산하는 결과를 `{ ok: true, data }`로 답하세요. `ok`, `configured`, `error`, `planLabel`, 그리고 창 이름을 키로 하는 `usage.windows`(각각 `usedPercent`, `windowSeconds`, `resetAt`(에포크 밀리초), 선택적인 `valueLabel` 또는 `value`), 모델별 창을 위한 `usage.models`입니다. 남은 비율, 초기화까지의 카운트다운, 서식이 적용된 문자열은 OhPiChamber가 도출하므로 카드는 내장 제공자의 것과 일치합니다.
 
 ```ts
 import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
@@ -425,9 +425,9 @@ const { text } = await host.generate({ prompt: notes, system: "Summarize in one 
 
 | 코드 | 발생 시점 |
 | --- | --- |
-| `HOST_UNAVAILABLE` | window가 없거나, OpenChamber 안이 아니거나, `dispose()`가 실행됨 |
+| `HOST_UNAVAILABLE` | window가 없거나, OhPiChamber 안이 아니거나, `dispose()`가 실행됨 |
 | `HOST_TIMEOUT` | 20초 동안 응답 없음 |
-| `HOST_REJECTED` | OpenChamber가 거부했거나, 이 SDK가 모르는 코드로 응답함 |
+| `HOST_REJECTED` | OhPiChamber가 거부했거나, 이 SDK가 모르는 코드로 응답함 |
 | `DISCONNECTED` | 통합에 대한 토큰이나 Linear 연결이 없음 |
 | `BAD_PATH` | `path` 형식이 잘못되었거나 허용된 origin을 벗어나려 함 |
 | `NO_INTEGRATION` | 매니페스트에 `integration`이 없음 |
@@ -443,7 +443,7 @@ const { text } = await host.generate({ prompt: notes, system: "Summarize in one 
 | `DENIED` | 운영 체제가 파일 작업을 거부함 |
 | `NO_MODEL` | 사용할 수 있는 Small Model 없이 `generate` 호출 |
 | `MODEL_FAILED` | Small Model이 오류를 반환함 |
-| `UNSUPPORTED` | 이 OpenChamber에서는 할 수 없는 호출, 예를 들어 Diff 뷰가 없는 곳의 `openCommit` |
+| `UNSUPPORTED` | 이 OhPiChamber에서는 할 수 없는 호출, 예를 들어 Diff 뷰가 없는 곳의 `openCommit` |
 
 ## 관련 문서
 

@@ -1,7 +1,7 @@
 {
   "name": "ohpichamber-sdk",
   "version": "1.0.0",
-  "description": "Contract for OpenChamber guests: manifest parse and iframe host bridge.",
+  "description": "Contract for OhPiChamber guests: manifest parse and iframe host bridge.",
   "private": false,
   "license": "MIT",
   "repository": {

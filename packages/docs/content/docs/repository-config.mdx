@@ -5,9 +5,9 @@ description: Keep project actions, worktree setup commands, starters, and plans 
 
 # Repository config
 
-Project actions, worktree setup commands, and draft starters live in your own OpenChamber settings by default. Nobody else sees them. If you want a teammate who clones the repository to get the same dev server action and the same `bun install` on every new worktree, move those items into the repository.
+Project actions, worktree setup commands, and draft starters live in your own OhPiChamber settings by default. Nobody else sees them. If you want a teammate who clones the repository to get the same dev server action and the same `bun install` on every new worktree, move those items into the repository.
 
-OpenChamber stores them in `.openchamber/project.json` at the repository root. The file appears only when you move the first item there, and it goes away again when you move the last one out. Commit it like any other file.
+OhPiChamber stores them in `.openchamber/project.json` at the repository root. The file appears only when you move the first item there, and it goes away again when you move the last one out. Commit it like any other file.
 
 ## What goes where
 
@@ -62,13 +62,13 @@ Items from the repository show an **In repo** badge. Repository actions can also
 }
 ```
 
-Only `version` is required. Every other key is optional, and OpenChamber writes only the keys that carry something.
+Only `version` is required. Every other key is optional, and OhPiChamber writes only the keys that carry something.
 
-`setupWorktree` is the list of shell commands OpenChamber runs inside a new worktree right after creating it, in order. Use `$ROOT_PROJECT_PATH` for the main checkout's path. `setupWorktreeWait: true` makes OpenChamber wait for these commands before it starts a session in the worktree.
+`setupWorktree` is the list of shell commands OhPiChamber runs inside a new worktree right after creating it, in order. Use `$ROOT_PROJECT_PATH` for the main checkout's path. `setupWorktreeWait: true` makes OhPiChamber wait for these commands before it starts a session in the worktree.
 
-`teardownWorktree` is the list of shell commands OpenChamber runs inside a worktree right before it deletes or archives it, in order, such as `docker compose down` for a stack the worktree started. If one fails, the worktree stays and OpenChamber shows the command's error. Repository teardown commands run first, then your own, also when you use only your own setup commands. They go through the same trust question as setup commands.
+`teardownWorktree` is the list of shell commands OhPiChamber runs inside a worktree right before it deletes or archives it, in order, such as `docker compose down` for a stack the worktree started. If one fails, the worktree stays and OhPiChamber shows the command's error. Repository teardown commands run first, then your own, also when you use only your own setup commands. They go through the same trust question as setup commands.
 
-`projectActions` is the project's list of actions, the ones you run from Work Status, the project actions dialog, and the command palette. `id`, `name`, and `command` are required. `icon` is optional and falls back to a play icon; the names OpenChamber knows are `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command`, and `file`. `autoOpenUrl: true` opens the address the command prints, see [Preview & Dev Servers](/preview/). `platforms` limits the action to `macos`, `linux`, or `windows`. `runIn: "parent"` runs the action in the main checkout instead of the current worktree.
+`projectActions` is the project's list of actions, the ones you run from Work Status, the project actions dialog, and the command palette. `id`, `name`, and `command` are required. `icon` is optional and falls back to a play icon; the names OhPiChamber knows are `play`, `build`, `lint`, `terminal`, `tools`, `bug`, `flask`, `rocket`, `code`, `server`, `branch`, `search`, `settings`, `brain`, `stack`, `robot`, `command`, and `file`. `autoOpenUrl: true` opens the address the command prints, see [Preview & Dev Servers](/preview/). `platforms` limits the action to `macos`, `linux`, or `windows`. `runIn: "parent"` runs the action in the main checkout instead of the current worktree.
 
 `draftStarters` pins commands and skills to the new session screen. Each entry is `{ "type": "command" | "skill", "name": "..." }`, referencing a command or skill from the workspace or agent catalogs (such as `.omp/commands/` or `.omp/skills/`) or built-in starters. The project config stores these references, not the command or skill definitions themselves.
 
@@ -86,7 +86,7 @@ The wait flag comes from your settings when you have set it, otherwise from the 
 
 ## Trust
 
-Setup commands and actions from the repository run on your machine, and a `git pull` can change them. So the first time one of them is about to run, OpenChamber shows the exact commands and asks. **Trust and run** remembers your answer on this instance. **Not this time** runs only your own commands.
+Setup commands and actions from the repository run on your machine, and a `git pull` can change them. So the first time one of them is about to run, OhPiChamber shows the exact commands and asks. **Trust and run** remembers your answer on this instance. **Not this time** runs only your own commands.
 
 The answer is tied to the commands themselves. When a pull changes a repository command, the question comes back for the new text. You can forget the answer with **reset trust** in the Worktree section of the project's settings.
 
@@ -94,9 +94,9 @@ Moving your own command into the repository counts as trusting it, since you hav
 
 ## Plans in the repository
 
-Plans on the Plans tab can also live in the repository, as Markdown files. The folder is `.openchamber/plans` by default. Set **Plans folder** in the project's settings to use another folder inside the repository, for example `docs/plans` if your team already keeps plans there. A custom folder replaces the default completely: OpenChamber reads and writes only that folder, so move existing files yourself when you change it.
+Plans on the Plans tab can also live in the repository, as Markdown files. The folder is `.openchamber/plans` by default. Set **Plans folder** in the project's settings to use another folder inside the repository, for example `docs/plans` if your team already keeps plans there. A custom folder replaces the default completely: OhPiChamber reads and writes only that folder, so move existing files yourself when you change it.
 
-Every `.md` file in that folder shows on the Plans tab, including files written by other tools. Editing one in OpenChamber saves the file as you typed it. A plan you move into the repository keeps its identity, so sessions that had it attached still find it.
+Every `.md` file in that folder shows on the Plans tab, including files written by other tools. Editing one in OhPiChamber saves the file as you typed it. A plan you move into the repository keeps its identity, so sessions that had it attached still find it.
 
 ## Related
 

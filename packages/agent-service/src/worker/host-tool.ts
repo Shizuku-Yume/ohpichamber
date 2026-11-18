@@ -29,19 +29,24 @@ const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Ob
   openchamber_render: true,
   openchamber_workflow: true,
 });
+const HostToolEnablementInputSchema = z.record(z.string(), z.boolean()).optional();
 
-export function normalizeHostToolEnablement(input?: Record<string, boolean>): Record<HostToolName, boolean> {
+export function normalizeHostToolEnablement(input?: unknown): Record<HostToolName, boolean> {
+  const parsed = HostToolEnablementInputSchema.safeParse(input);
+  const record = parsed.success ? parsed.data : undefined;
+
   const result = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
-  if (!input) return result;
+  if (!record) return result;
+
   for (const name of HOST_TOOL_NAMES) {
-    if (typeof input[name] === 'boolean') result[name] = input[name];
+    if (typeof record[name] === 'boolean') result[name] = record[name];
   }
-  if (typeof input.agentControlToolEnabled === 'boolean') result.openchamber = input.agentControlToolEnabled;
-  if (typeof input.agentWebToolEnabled === 'boolean') result.web = input.agentWebToolEnabled;
-  if (typeof input.agentKnowledgeToolEnabled === 'boolean') result.openchamber_knowledge = input.agentKnowledgeToolEnabled;
-  if (typeof input.agentNotifyToolEnabled === 'boolean') result.notify = input.agentNotifyToolEnabled;
-  if (typeof input.agentRenderToolEnabled === 'boolean') result.openchamber_render = input.agentRenderToolEnabled;
-  if (typeof input.agentWorkflowToolEnabled === 'boolean') result.openchamber_workflow = input.agentWorkflowToolEnabled;
+  if (typeof record.agentControlToolEnabled === 'boolean') result.openchamber = record.agentControlToolEnabled;
+  if (typeof record.agentWebToolEnabled === 'boolean') result.web = record.agentWebToolEnabled;
+  if (typeof record.agentKnowledgeToolEnabled === 'boolean') result.openchamber_knowledge = record.agentKnowledgeToolEnabled;
+  if (typeof record.agentNotifyToolEnabled === 'boolean') result.notify = record.agentNotifyToolEnabled;
+  if (typeof record.agentRenderToolEnabled === 'boolean') result.openchamber_render = record.agentRenderToolEnabled;
+  if (typeof record.agentWorkflowToolEnabled === 'boolean') result.openchamber_workflow = record.agentWorkflowToolEnabled;
   return result;
 }
 

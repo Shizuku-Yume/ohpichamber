@@ -8,6 +8,7 @@ import { createServer, type Server } from 'node:net';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 
 import { WorkerRegistry, WORKER_CAPACITY_POLICY } from './workers.ts';
+import { CatalogCoordinator } from './catalog.ts';
 import { AgentService } from './service.ts';
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
 
@@ -127,7 +128,7 @@ test('a deferred registration failure surfaces with its cause as a session error
       const headers = new Headers({ 'x-internal-secret': secret, accept: 'application/json' });
       if (init.body) headers.set('content-type', 'application/json');
       const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { ...init, headers });
-      return { status: response.status, body: await response.json().catch(() => null) as unknown };
+      return { status: response.status, body: await response.json().catch(() => null) as ServiceResponse | ProblemDetails | null };
     };
 
     // Register workspace
@@ -138,7 +139,8 @@ test('a deferred registration failure surfaces with its cause as a session error
     expect(wsResp.status).toBe(201);
 
     // Mock catalog.register to reject with the sentinel cause
-    const coordinator = (service as unknown as { catalog: { register: (worker: unknown) => Promise<void> } }).catalog;
+    // SAFETY: Accessing private `catalog` for test-only mocking purposes.
+    const coordinator = (service as unknown as { catalog: CatalogCoordinator }).catalog;
     coordinator.register = async () => {
       throw new Error(sentinelCause);
     };

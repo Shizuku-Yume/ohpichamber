@@ -228,14 +228,18 @@ export class WorkerSession {
       const title = session.sessionManager.getSessionName()?.trim();
       if (title) this.emit([{ timestamp: Date.now(), event: { type: 'session.updated', title } }]);
     });
+    // SAFETY: Input received from the subagent lifecycle event bus.
     this.subagentEventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
+       // SAFETY: Input received from the subagent lifecycle event bus.
       const payload = data as SubagentLifecyclePayload;
       this.onSubagent(payload);
       this.handleSubagentLifecycle(payload);
     });
+    // SAFETY: Input received from the subagent progress event bus.
     this.subagentEventBus.on(TASK_SUBAGENT_PROGRESS_CHANNEL, data => {
       this.handleSubagentProgress(data as SubagentProgressPayload);
     });
+    // SAFETY: Input received from the subagent event bus.
     this.subagentEventBus.on(TASK_SUBAGENT_EVENT_CHANNEL, data => {
       this.handleSubagentEvent(data as SubagentEventPayload);
     });

@@ -166,12 +166,14 @@ function canonicalUsage(usage: NonNullable<NativeAssistantMessage['usage']>): To
 function stepTiming(message: NativeAssistantMessage): StepTiming {
   const startedAt = Math.max(0, Math.round(message.timestamp));
   const timing: StepTiming = { startedAt };
-  if (typeof message.ttft === 'number' && Number.isFinite(message.ttft)) {
-    timing.firstTokenAt = Math.max(startedAt, Math.round(startedAt + message.ttft));
+  const ttft = z.number().finite().safeParse(message.ttft);
+  if (ttft.success) {
+    timing.firstTokenAt = Math.max(startedAt, Math.round(startedAt + ttft.data));
   }
-  const completed = typeof message.completedAt === 'number' && Number.isFinite(message.completedAt)
-    ? message.completedAt
-    : typeof message.duration === 'number' && Number.isFinite(message.duration) ? startedAt + message.duration : undefined;
+  const completedAt = z.number().finite().safeParse(message.completedAt);
+  const completed = completedAt.success
+    ? completedAt.data
+    : duration.success ? startedAt + duration.data : undefined;
   if (completed !== undefined && Number.isFinite(completed)) timing.completedAt = Math.max(startedAt, Math.round(completed));
   return timing;
 }
@@ -277,7 +279,7 @@ function toolResultText(content: unknown): string {
  */
 function toolResultOutput(content: unknown, details: unknown): JsonValue {
   const host = HostDetailsSchema.safeParse(details ?? {});
-  const base: Record<string, unknown> = details === undefined ? { content: content ?? [] } : { content: content ?? [], details };
+  const base: { content: unknown; details?: unknown; openchamber?: unknown } = details === undefined ? { content: content ?? [] } : { content: content ?? [], details };
   if (host.success && host.data.openchamber !== undefined) base.openchamber = host.data.openchamber;
   // SDK details can hold undefined fields; IPC and the wire carry JSON.
   return JsonValueSchema.parse(JSON.parse(JSON.stringify(base)));
@@ -328,7 +330,7 @@ function parts(message: VisibleMessage, messageId: string, attachments: PromptAt
     result.push({ type: 'text', partId: partId(messageId, 0), content: message.content });
   }
   if (message.role === 'assistant') {
-    const nativeAny = message as unknown as Record<string, unknown>;
+    const nativeAny = message as NativeMessage & { upstreamModel?: unknown; model?: unknown };
     if (typeof nativeAny.upstreamModel === 'string' && typeof nativeAny.model === 'string' && nativeAny.upstreamModel && nativeAny.upstreamModel !== nativeAny.model) {
       result.push({
         type: 'notice',
@@ -502,12 +504,12 @@ export class WorkerProjection {
 
   private parseEditPreview(update: unknown): EditPreview | undefined {
     if (!update || typeof update !== 'object') return undefined;
-    const updateObj = update as Record<string, unknown>;
+    const updateObj = update as { files?: unknown };
     if (!('files' in updateObj) || !Array.isArray(updateObj.files)) return undefined;
     const files: EditPreviewFile[] = [];
     for (const item of updateObj.files) {
       if (!item || typeof item !== 'object') continue;
-      const file = item as Record<string, unknown>;
+      const file = item as { path?: unknown };
       if (typeof file.path !== 'string' || !file.path) continue;
       files.push({
         path: this.publicText(file.path),
@@ -1024,7 +1026,7 @@ export class WorkerProjection {
           Object.assign(current, finalMetadata);
           emit({ type: 'message.updated', messageId: current.messageId, ...finalMetadata });
 
-          const nativeAny = event.message as unknown as Record<string, unknown>;
+          const nativeAny = event.message as NativeMessage & { upstreamModel?: unknown; model?: unknown };
           if (typeof nativeAny.upstreamModel === 'string' && typeof nativeAny.model === 'string' && nativeAny.upstreamModel && nativeAny.upstreamModel !== nativeAny.model) {
             this.persistAndPublishNotice({
               type: 'notice',

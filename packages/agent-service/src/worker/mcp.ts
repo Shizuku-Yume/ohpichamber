@@ -168,30 +168,37 @@ function sanitizeCommand(value: string): string {
   return command;
 }
 
-/** The workspace owner supplies the durable revision; a worker never mints it. */
+const MCPServerEntrySchema = z.object({
+  enabled: z.boolean().optional(),
+  name: z.string().optional(),
+  type: z.string().optional(),
+  url: z.string().optional(),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+}).passthrough();
+
+const MCPConfigFileSchema = z.object({
+  mcpServers: z.record(z.string(), MCPServerEntrySchema).optional(),
+  disabledServers: z.array(z.string()).optional(),
+}).passthrough();
+
 function projectUnmanagedMcpConfiguration(
   raw: unknown,
   workspaceId: string,
   scope: 'project' | 'user' = 'project',
   managed = false,
 ): MCPConfigurationState {
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+  const parsed = MCPConfigFileSchema.safeParse(raw);
+  if (!parsed.success) {
     throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
   }
-  const rawObj = raw as Record<string, unknown>;
+  const rawObj = parsed.data;
   const mcpServers = rawObj.mcpServers;
-  if (mcpServers !== undefined && (typeof mcpServers !== 'object' || mcpServers === null || Array.isArray(mcpServers))) {
-    throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
-  }
-  const disabledList = Array.isArray(rawObj.disabledServers)
-    ? rawObj.disabledServers.filter((item): item is string => typeof item === 'string')
-    : [];
+  const disabledList = rawObj.disabledServers ?? [];
   const servers: MCPServerConfig[] = [];
   const seenIds = new Set<string>();
 
-  for (const [key, value] of Object.entries((mcpServers as Record<string, unknown> | undefined) ?? {})) {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) continue;
-    const cfg = value as Record<string, unknown>;
+  for (const [key, cfg] of Object.entries(mcpServers ?? {})) {
     const serverId = serverIdForKey(key);
     if (seenIds.has(serverId)) continue;
     seenIds.add(serverId);
@@ -206,7 +213,7 @@ function projectUnmanagedMcpConfiguration(
         url: typeof cfg.url === 'string' ? sanitizeRemoteUrl(cfg.url) : 'http://localhost',
       };
     } else {
-      const args = Array.isArray(cfg.args) ? cfg.args.filter((item): item is string => typeof item === 'string') : [];
+      const args = Array.isArray(cfg.args) ? cfg.args : [];
       transport = { type: 'stdio', command: typeof cfg.command === 'string' ? sanitizeCommand(cfg.command) : 'stdio-server', args };
     }
     servers.push({ serverId, label, enabled, managed, scope, transport });
@@ -218,12 +225,16 @@ function projectUnmanagedMcpConfiguration(
 /** Credential references of one server, as stored in the user file's OpenChamber key. */
 function credentialMapping(server: MCPServerConfig): CredentialMapping | undefined {
   const { transport } = server;
-  const mapping: CredentialMapping = transport.type === 'stdio'
-    ? (transport.envCredentialRefs ? { envCredentialRefs: transport.envCredentialRefs } : {})
-    : {
-      ...(transport.credentialRef ? { credentialRef: transport.credentialRef } : {}),
-      ...(transport.headerCredentialRefs ? { headerCredentialRefs: transport.headerCredentialRefs } : {}),
-    };
+  if (transport.type === 'stdio') {
+    return transport.envCredentialRefs ? { envCredentialRefs: transport.envCredentialRefs } : undefined;
+  }
+  const mapping: CredentialMapping = {};
+  if (transport.credentialRef) {
+    mapping.credentialRef = transport.credentialRef;
+  }
+  if (transport.headerCredentialRefs) {
+    mapping.headerCredentialRefs = transport.headerCredentialRefs;
+  }
   return Object.keys(mapping).length > 0 ? mapping : undefined;
 }
 

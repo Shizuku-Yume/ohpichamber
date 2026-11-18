@@ -7,7 +7,7 @@ import type { RunningShell } from '@openchamber/agent-contract';
 import { WorkerShell } from './shell.ts';
 
 function createMockStreams(records: Array<{ id: number; producer: string; consumer: string; data: string | Uint8Array; open: boolean }>): PipeStreams {
-  return {
+  const streams: PipeStreams = {
     list() {
       return records.map(r => ({
         id: r.id,
@@ -30,7 +30,8 @@ function createMockStreams(records: Array<{ id: number; producer: string; consum
         open: match.open,
       };
     },
-  } as unknown as PipeStreams;
+  };
+  return streams;
 }
 
 describe('WorkerShell streams, stdin, and job widgets', () => {

@@ -98,14 +98,22 @@ async function readSource(reference: UsageSessionReference, includeTools: boolea
           if (!ToolCall.safeParse(block).success) throw new CorruptSession();
           content.push({ type: 'toolCall', id: block.id, name: block.name, arguments: {} });
         }
-        entries.push({
-          ...base, type: 'message', message: {
-            role: 'assistant', api: message.api, provider: message.provider,
-            model: message.model, usage: message.usage, stopReason: message.stopReason, timestamp: message.timestamp, content,
-            duration: typeof message.duration === 'number' ? message.duration : undefined,
-            ttft: typeof message.ttft === 'number' ? message.ttft : undefined,
-          }
-        });
+        const messageData: z.infer<typeof Assistant> = {
+          role: 'assistant',
+          // SAFETY: API is optional on the Assistant contract.
+          api: message.api as string | undefined,
+          provider: message.provider,
+          model: message.model,
+          usage: message.usage,
+          stopReason: message.stopReason,
+          timestamp: message.timestamp,
+          content,
+        };
+        const duration = message.duration;
+        const ttft = message.ttft;
+        if (typeof duration === 'number') messageData.duration = duration;
+        if (typeof ttft === 'number') messageData.ttft = ttft;
+        entries.push({ ...base, type: 'message', message: messageData });
       } else if (message.role === 'user') {
         entries.push({ ...base, type: 'message', message: { role: 'user', content: '', synthetic: message.synthetic, timestamp: message.timestamp } });
       } else if (includeTools && message.role === 'toolResult') {
@@ -564,10 +572,15 @@ function projectLimit(limit: UsageLimit): UsageAuthLimit {
 
 function projectReport(report: UsageReport): UsageAuthReport {
   const credits = report.resetCredits;
-  return {
-    provider: report.provider, fetchedAt: report.fetchedAt, limits: report.limits.map(projectLimit),
-    ...(credits ? { resetCredits: { availableCount: credits.availableCount, redeemableCount: credits.redeemableCount } } : {}),
+  const result: UsageAuthReport = {
+    provider: report.provider,
+    fetchedAt: report.fetchedAt,
+    limits: report.limits.map(projectLimit),
   };
+  if (credits) {
+    result.resetCredits = { availableCount: credits.availableCount, redeemableCount: credits.redeemableCount };
+  }
+  return result;
 }
 
 function projectHistory(entry: UsageHistoryEntry): UsageAuthHistoryEntry {

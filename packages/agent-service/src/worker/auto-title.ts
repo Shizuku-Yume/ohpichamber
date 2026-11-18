@@ -90,23 +90,31 @@ const hasSettledAssistantReply = (messages: readonly AgentMessage[]): boolean =>
 };
 
 /** Extract plain text from the session's first user message. */
+/** Normalize message content to a domain type. */
+function asContentDomain(content: AgentMessage['content']): string[] {
+ // SAFETY: Input I/O boundary parsing.
+ if (typeof content === 'string') {
+  return [content];
+ }
+ if (Array.isArray(content)) {
+  const parts: string[] = [];
+  for (const part of content) {
+   if (part && typeof part === 'object' && 'type' in part && part.type === 'text' && typeof part.text === 'string') {
+    parts.push(part.text);
+   }
+  }
+  return parts;
+ }
+ return [];
+}
+
+/** Extract plain text from the session's first user message. */
 export function firstUserMessageText(messages: readonly AgentMessage[]): string | undefined {
  for (const message of messages) {
   if (message?.role !== 'user') continue;
-  if (typeof message.content === 'string') {
-   const text = message.content.trim();
-   if (text) return text;
-  } else if (Array.isArray(message.content)) {
-   const parts: string[] = [];
-   for (const part of message.content) {
-    if (part && typeof part === 'object' && 'type' in part && part.type === 'text' && 'text' in part && typeof part.text === 'string') {
-     const text = part.text.trim();
-     if (text) parts.push(text);
-    }
-   }
-   const combined = parts.join(' ').trim();
-   if (combined) return combined;
-  }
+  const content = asContentDomain(message.content);
+  const text = content.map(p => p.trim()).filter(Boolean).join(' ').trim();
+  if (text) return text;
  }
  return undefined;
 }
